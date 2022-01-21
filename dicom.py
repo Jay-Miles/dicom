@@ -8,8 +8,7 @@ Purpose: SBI102 ICT in the Clinical Environment competencies 3 & 4
 
 UPMC Breast Tomography and FFDM Collection:
 
-https://www.dclunie.com/pixelmedimagearchive/upmcdigitalmammotomocollection/
-index.html
+https://www.dclunie.com/pixelmedimagearchive/upmcdigitalmammotomocollection/index.html
 
 -Using Case 6 as an example
 -Downloaded file is in .tar.bz2 format and is 172,557 KB
@@ -23,34 +22,6 @@ Largest file is 640869820 bytes:
 Smallest file is 3262956 bytes:
 1.3.6.1.4.1.5962.99.1.2280943358.716200484.1363785608958.637.0.dcm
 
-File structure is:
-Case6 [Case6]
-    20081001 022733 [ - BREAST IMAGING TOMOSYNTHESIS]
-        Series 72100000 [MG - R CC Tomosynthesis Projection]
-            1.3.6.1.4.1.5962.99.1.2280943358.716200484.1363785608958.637.0.dcm
-        Series 72100000 [MG - R MLO Tomosynthesis Projection]
-            1.3.6.1.4.1.5962.99.1.2280943358.716200484.1363785608958.640.0.dcm
-        Series 73100000 [MG - R CC Tomosynthesis Reconstruction]
-            1.3.6.1.4.1.5962.99.1.2280943358.716200484.1363785608958.643.0.dcm
-        Series 73100000 [MG - R MLO Tomosynthesis Reconstruction]
-            1.3.6.1.4.1.5962.99.1.2280943358.716200484.1363785608958.645.0.dcm
-        Series 73200000 [MG - R CC Breast Tomosynthesis Image]
-            1.3.6.1.4.1.5962.99.1.2280943358.716200484.1363785608958.647.0.dcm
-        Series 73200000 [MG - R MLO Breast Tomosynthesis Image]
-            1.3.6.1.4.1.5962.99.1.2280943358.716200484.1363785608958.649.0.dcm
-    20081001 070915 [ - MAMMOGRAM DIGITAL SCR BILAT]
-        Series 001 [MG - R CC]
-            1.3.6.1.4.1.5962.99.1.2280943358.716200484.1363785608958.625.0.dcm
-        Series 002 [MG - L CC]
-            1.3.6.1.4.1.5962.99.1.2280943358.716200484.1363785608958.629.0.dcm
-        Series 003 [MG - L MLO]
-            1.3.6.1.4.1.5962.99.1.2280943358.716200484.1363785608958.631.0.dcm
-        Series 004 [MG - R MLO]
-            1.3.6.1.4.1.5962.99.1.2280943358.716200484.1363785608958.633.0.dcm
-    20081001 030956 [ - MAMMOGRAM DIGITAL DX UNILAT RT]
-        Series 71100000 [MG - R ML]
-            1.3.6.1.4.1.5962.99.1.2280943358.716200484.1363785608958.635.0.dcm
-
 """
 
 
@@ -58,7 +29,6 @@ import os
 import tarfile
 import numpy as np
 
-from pathlib import Path
 from PIL import Image
 from pydicom import dcmread
 
@@ -183,8 +153,8 @@ def extract_all_files(archive):
 
 def smallest_file_example(archive):
     """
-    Extract the smallest file from a .tar.bz2 archive, convert it to an
-    image array, and save it as a PNG.
+    Find the smallest file in a (previously extracted) .tar.bz2 archive,
+    convert it to an image array, and save it as a PNG.
     """
 
     filepath = identify_smallest_file(archive)
@@ -201,9 +171,6 @@ def smallest_file_example(archive):
 
     # Get the file's Pixel Data as an array via the pixel_array element
     image_array = dataset.pixel_array
-    # print(dataset)
-    # print(image_array)
-    # print(image_array.shape)
 
     # Create an image using from the array using pillow (PIL)
     im = Image.fromarray(np.uint8(image_array))
@@ -213,13 +180,29 @@ def smallest_file_example(archive):
     im.save('{a}.png'.format(a = filename))
 
 
+def make_images_folder():
+    """ Make a new directory to hold images """
+
+    new_dir = 'Images'
+    parent_dir = 'C:\\Users\\Jay\\Projects\\dicom\\dicom'
+    path = os.path.join(parent_dir, new_dir)
+
+    try:
+        os.mkdir(path)
+
+    except FileExistsError:
+        pass
+
+
 def process_whole_directory():
     """
     Iterate over the contents of a directory, convert each .dcm file to a
     numpy array, and save as PNG image.
     """
 
-    # Iterate over the extracted contents
+    make_images_folder()
+
+    # Iterate over the extracted archive contents
     for root, dirs, files in os.walk('Case6 [Case6]'):
 
         # Look only at files
@@ -230,25 +213,48 @@ def process_whole_directory():
 
                 # Read in the dataset as binary using pydicom
                 filepath = os.path.join(root, file)
-
-                # Read in the dataset as binary using pydicom
                 with open(filepath, 'rb') as file_reader:
                     dataset = dcmread(file_reader)
 
-                try:  # try to get Pixel Data as array from pixel_array element
-                    image_array = dataset.pixel_array
-                    # print(image_array)
-                    # print(image_array.shape)
+                # Get Pixel Data as array from pixel_array element
+                image_array = dataset.pixel_array
 
-                    try:  # try to create image and save as .png
-                        im = Image.fromarray(np.uint8(image_array))
-                        im.save('{a}.png'.format(a = file[:-4]))
+                # Deal with single-frame files
+                if len(image_array.shape) == 2:
 
-                    except TypeError:
+                    # Create an image
+                    im = Image.fromarray(np.uint8(image_array))
+
+                    # Save as .png in the Images directory
+                    os.chdir('C:\\Users\\Jay\\Projects\\dicom\\dicom\\Images')
+                    im.save('{a}.png'.format(a = file[:-4]))
+                    os.chdir('C:\\Users\\Jay\\Projects\\dicom\\dicom')
+
+                # Deal with multi-frame files
+                if len(image_array.shape) == 3:
+
+                    # Create a new subdirectory to hold the images
+                    new_dir = '{}'.format(file)
+                    parent_dir = 'C:\\Users\\Jay\\Projects\\dicom\\dicom\\Images'
+                    path = os.path.join(parent_dir, new_dir)
+
+                    try:
+                        os.mkdir(path)
+
+                    except FileExistsError:
                         continue
 
-                except MemoryError:
-                    continue
+                    # Go into that subdirectory and create/save all the images
+                    os.chdir(path)
+
+                    i = 1
+                    for frame in image_array:
+                        im = Image.fromarray(np.uint8(frame))
+                        im.save('{0}_{1}.png'.format(file, i))
+                        i += 1
+
+                    # Go back into the main project directory
+                    os.chdir('C:\\Users\\Jay\\Projects\\dicom\\dicom')
 
 
 def main():
