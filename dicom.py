@@ -4,7 +4,7 @@
 Name: Medical Physics DICOM project
 Date: 19 Jan 2022
 Author: Jay Miles
-Purpose: SBI102 ICT in the Clinical Environment competencies 3 & 4
+STP: SBI102 ICT in the Clinical Environment competencies 3 & 4
 
 UPMC Breast Tomography and FFDM Collection:
 
