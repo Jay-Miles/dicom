@@ -33,8 +33,10 @@ from PIL import Image
 from pydicom import dcmread
 
 
-def look_at_download(archive):
+def look_at_download(parent_dir, archive):
     """ Use the tarfile package to examine contents of a .tar.bz2 archive """
+
+    os.chdir(parent_dir)
 
     # Open archive
     tar = tarfile.open(archive, 'r:bz2')
@@ -101,10 +103,12 @@ def look_at_download(archive):
         ))
 
 
-def identify_largest_file(archive):
+def identify_largest_file(parent_dir, archive):
     """
     Use the tarfile package to find the largest file in a .tar.bz2 archive.
     """
+
+    os.chdir(parent_dir)
 
     tar = tarfile.open(archive, 'r:bz2')
 
@@ -122,10 +126,12 @@ def identify_largest_file(archive):
     return largest_file
 
 
-def identify_smallest_file(archive):
+def identify_smallest_file(parent_dir, archive):
     """
     Use the tarfile package to find the smallest file in a .tar.bz2 archive.
     """
+
+    os.chdir(parent_dir)
 
     tar = tarfile.open(archive, 'r:bz2')
 
@@ -143,21 +149,23 @@ def identify_smallest_file(archive):
     return smallest_file
 
 
-def extract_all_files(archive):
+def extract_all_files(parent_dir, archive):
     """ Extract all contents of a .tar.bz2 archive into a new directory. """
+
+    os.chdir(parent_dir)
 
     tar = tarfile.open(archive, 'r:bz2')
     tar.extractall()
     tar.close()
 
 
-def smallest_file_example(archive):
+def smallest_file_example(parent_dir, archive):
     """
     Find the smallest file in a (previously extracted) .tar.bz2 archive,
     convert it to an image array, and save it as a PNG.
     """
 
-    filepath = identify_smallest_file(archive)
+    filepath = identify_smallest_file(parent_dir, archive)
     print('filepath is: {a}'.format(a = filepath))
 
     split_path = filepath.split('/')
@@ -180,11 +188,10 @@ def smallest_file_example(archive):
     im.save('{a}.png'.format(a = filename))
 
 
-def make_images_folder():
+def make_images_folder(parent_dir):
     """ Make a new directory to hold images """
 
     new_dir = 'Images'
-    parent_dir = 'C:\\Users\\Jay\\Projects\\dicom\\dicom'
     path = os.path.join(parent_dir, new_dir)
 
     try:
@@ -194,16 +201,18 @@ def make_images_folder():
         pass
 
 
-def process_whole_directory():
+def process_whole_directory(parent_dir, extracted_archive):
     """
     Iterate over the contents of a directory, convert each .dcm file to a
     numpy array, and save as PNG image.
     """
 
-    make_images_folder()
+    os.chdir(parent_dir)
+    make_images_folder(parent_dir)
+    images_path = os.path.join(parent_dir, 'Images')
 
     # Iterate over the extracted archive contents
-    for root, dirs, files in os.walk('Case6 [Case6]'):
+    for root, dirs, files in os.walk(extracted_archive):
 
         # Look only at files
         for file in files:
@@ -213,6 +222,8 @@ def process_whole_directory():
 
                 # Read in the dataset as binary using pydicom
                 filepath = os.path.join(root, file)
+                filename = file[:-4]
+
                 with open(filepath, 'rb') as file_reader:
                     dataset = dcmread(file_reader)
 
@@ -226,45 +237,46 @@ def process_whole_directory():
                     im = Image.fromarray(np.uint8(image_array))
 
                     # Save as .png in the Images directory
-                    os.chdir('C:\\Users\\Jay\\Projects\\dicom\\dicom\\Images')
-                    im.save('{a}.png'.format(a = file[:-4]))
-                    os.chdir('C:\\Users\\Jay\\Projects\\dicom\\dicom')
+                    os.chdir(images_path)
+                    im.save('{a}.png'.format(a = filename))
+                    os.chdir(parent_dir)
 
-                # Deal with multi-frame files
+                # Deal with multiframe files
                 if len(image_array.shape) == 3:
 
                     # Create a new subdirectory to hold the images
-                    new_dir = '{}'.format(file)
-                    parent_dir = 'C:\\Users\\Jay\\Projects\\dicom\\dicom\\Images'
-                    path = os.path.join(parent_dir, new_dir)
+                    file_dir = '{}'.format(filename)
+                    file_dir_path = os.path.join(images_path, file_dir)
 
                     try:
-                        os.mkdir(path)
+                        os.mkdir(file_dir_path)
 
                     except FileExistsError:
                         continue
 
                     # Go into that subdirectory and create/save all the images
-                    os.chdir(path)
+                    os.chdir(file_dir_path)
 
                     i = 1
                     for frame in image_array:
                         im = Image.fromarray(np.uint8(frame))
-                        im.save('{0}_{1}.png'.format(file, i))
+                        im.save('{0}_{1}.png'.format(filename, i))
                         i += 1
 
                     # Go back into the main project directory
-                    os.chdir('C:\\Users\\Jay\\Projects\\dicom\\dicom')
+                    os.chdir(parent_dir)
 
 
 def main():
-    archive = 'MammoTomoUPMC_Case6.tar.bz2'  # Downloaded Case 6 archive
+    parent_dir = 'C:\\Users\\Jay\\Projects\\dicom\\dicom'  # archive location
+    archive = 'MammoTomoUPMC_Case6.tar.bz2'  # Downloaded archive file
+    extracted_archive = 'Case6 [Case6]'  # name of extracted archive folder
 
-    # look_at_download(archive)
-    # extract_smallest_file(archive)
-    # extract_all_files(archive)
-    # smallest_file_example(archive)
-    process_whole_directory()
+    # look_at_download(parent_dir, archive)
+    # extract_smallest_file(parent_dir, archive)
+    # extract_all_files(parent_dir, archive)
+    # smallest_file_example(parent_dir, archive)
+    process_whole_directory(parent_dir, extracted_archive)
 
 
 if __name__ == '__main__':
