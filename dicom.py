@@ -126,25 +126,28 @@ def identify_largest_file(parent_dir, archive):
     return largest_file
 
 
-def identify_smallest_file(parent_dir, archive):
+def identify_smallest_file(extracted_path):
     """
     Use the tarfile package to find the smallest file in a .tar.bz2 archive.
     """
 
-    os.chdir(parent_dir)
-
-    tar = tarfile.open(archive, 'r:bz2')
-
-    smallest_file_size = 650000000  # must be > biggest file in archive
+    # Counter must start higher than largest file size
+    smallest_file_size = 650000000
     smallest_file = ''
 
-    for tarinfo in tar:
-        if tarinfo.isreg():
-            if tarinfo.size < smallest_file_size:
-                smallest_file_size = tarinfo.size
-                smallest_file = tarinfo.name
+    # Iterate over extracted archive and look only at files
+    for root, dirs, files in os.walk(extracted_path):
+        for file in files:
 
-    tar.close()
+            # Look at .dcm files, get their filepath and size
+            if file.lower().endswith('.dcm'):
+                filepath = os.path.join(root, file)
+                file_size = os.path.getsize(filepath)
+
+                # If they're smaller than the counter, update it
+                if file_size < smallest_file_size:
+                    smallest_file = filepath
+                    smallest_file_size = file_size
 
     return smallest_file
 
@@ -159,33 +162,32 @@ def extract_all_files(parent_dir, archive):
     tar.close()
 
 
-def smallest_file_example(parent_dir, archive):
+def smallest_file_example(extracted_path):
     """
     Find the smallest file in a (previously extracted) .tar.bz2 archive,
     convert it to an image array, and save it as a PNG.
     """
 
-    filepath = identify_smallest_file(parent_dir, archive)
-    print('filepath is: {a}'.format(a = filepath))
-
-    split_path = filepath.split('/')
-    last_path = split_path[-1]
-    filename = last_path[:-4]
-    print('filename is: {a}'.format(a = filename))
+    filepath = identify_smallest_file(extracted_path)
+    filename = filepath.split('\\')[-1]
+    file_size = os.path.getsize(filepath)
+    print('smallest file ({} bytes): {}'.format(file_size, filename))
+    print('full path: {}'.format(filepath))
 
     # Read in the dataset as binary using pydicom
     with open(filepath, 'rb') as file_reader:
         dataset = dcmread(file_reader)
 
-    # Get the file's Pixel Data as an array via the pixel_array element
+    # Get Pixel Data as numpy array using pydicom pixel_array syntax
     image_array = dataset.pixel_array
 
-    # Create an image using from the array using pillow (PIL)
-    im = Image.fromarray(np.uint8(image_array))
+    if len(image_array.shape) == 2:  # if the file is not multiframe
+        im = Image.fromarray(np.uint8(image_array))
+        im.show()
 
-    # Save the image in .png format
-    im.show()
-    im.save('{a}.png'.format(a = filename))
+    elif len(image_array.shape) == 3:   # if the file IS multiframe
+        im = Image.fromarray(np.uint8(image_array[0]))
+        im.show()
 
 
 def make_images_folder(parent_dir):
@@ -268,15 +270,17 @@ def process_whole_directory(parent_dir, extracted_archive):
 
 
 def main():
-    parent_dir = 'C:\\Users\\Jay\\Projects\\dicom\\dicom'  # archive location
+    parent_dir = 'C:\\Users\\Jay\\Projects\\dicom\\dicom'  # Archive location
     archive = 'MammoTomoUPMC_Case6.tar.bz2'  # Downloaded archive file
-    extracted_archive = 'Case6 [Case6]'  # name of extracted archive folder
+    extracted_archive = 'Case6 [Case6]'  # Name of extracted archive folder
+
+    extracted_path = os.path.join(parent_dir, extracted_archive)
 
     # look_at_download(parent_dir, archive)
     # extract_smallest_file(parent_dir, archive)
     # extract_all_files(parent_dir, archive)
-    # smallest_file_example(parent_dir, archive)
-    process_whole_directory(parent_dir, extracted_archive)
+    # smallest_file_example(extracted_path)
+    # process_whole_directory(parent_dir, extracted_archive)
 
 
 if __name__ == '__main__':
