@@ -34,9 +34,10 @@ should be an existing ubuntu package to just install...
 """
 
 
-import os
-import tarfile
 import numpy as np
+import os
+import subprocess
+import tarfile
 
 from PIL import Image
 from pydicom import dcmread
@@ -211,17 +212,31 @@ def make_images_folder(parent_dir):
     return images_path
 
 
-def process_whole_directory(parent_dir, extracted_archive):
+def make_metadata_folder(parent_dir):
+    """ Make a new directory to hold metadata files """
+
+    new_dir = 'Metadata'
+    metadata_path = os.path.join(parent_dir, new_dir)
+
+    try:
+        os.mkdir(metadata_path)
+
+    except FileExistsError:
+        pass
+
+    return metadata_path
+
+
+def process_for_images(parent_dir, extracted_path):
     """
     Iterate over the contents of a directory, convert each .dcm file to a
     numpy array, and save as PNG image
     """
 
-    os.chdir(parent_dir)
     images_path = make_images_folder(parent_dir)
 
     # Iterate over the extracted archive contents
-    for root, dirs, files in os.walk(extracted_archive):
+    for root, dirs, files in os.walk(extracted_path):
 
         # Look only at files
         for file in files:
@@ -246,9 +261,10 @@ def process_whole_directory(parent_dir, extracted_archive):
                     im = Image.fromarray(np.uint8(image_array))
 
                     # Save as .png in the Images directory
-                    os.chdir(images_path)
-                    im.save('{}.png'.format(filename))
-                    os.chdir(parent_dir)
+                    im_filename = filename + '.png'
+                    im_path = os.path.join(images_path, im_filename)
+
+                    im.save(im_path)
 
                 # Deal with multiframe files
                 if len(image_array.shape) == 3:
@@ -263,24 +279,56 @@ def process_whole_directory(parent_dir, extracted_archive):
                     except FileExistsError:
                         continue
 
-                    # Go into that subdirectory and create/save all the images
-                    os.chdir(file_dir_path)
-
                     i = 1
                     for frame in image_array:
                         im = Image.fromarray(np.uint8(frame))
-                        im.save('{}_{}.png'.format(filename, i))
+
+                        im_filename = '{}_{}.png'.format(filename, i)
+                        im_path = os.path.join(file_dir_path, im_filename)
+                        im.save(im_path)
+
                         i += 1
 
-                    # Go back into the main project directory
-                    os.chdir(parent_dir)
+
+def process_for_metadata(parent_dir, extracted_path):
+    """ Iterate over the contents of a directory and dump the metadata
+    for each .dcm file """
+
+    metadata_path = make_metadata_folder(parent_dir)
+
+    # Iterate over the extracted archive contents
+    for root, dirs, files in os.walk(extracted_path):
+
+        # Look only at files
+        for file in files:
+
+            # Look only at .dcm files
+            if file.lower().endswith('.dcm'):
+
+                # Read in the dataset as binary using pydicom
+                old_filepath = os.path.join(root, file)
+                new_filename = file[:-4] + '.txt'
+                new_filepath = os.path.join(metadata_path, new_filename)
+
+                dcm_call = ['dcmdump', '-M', str(old_filepath)]
+
+                dcm_dump = subprocess.run(
+                    dcm_call,
+                    text = True,
+                    capture_output = True,
+                    )
+
+                dcm_text = dcm_dump.stdout
+
+                with open(new_filepath, 'w') as file_writer:
+                    file_writer.write(dcm_text)
 
 
 def compression_test(extracted_archive):
     """ Compress the extracted directory and re-archive as .tar.bz2, then
     extract again and decompress to check no loss of data """
 
-    # I need CharPyLS for this but it is not co-operating
+    # Use CharPyLS
 
 
 def main():
@@ -293,9 +341,13 @@ def main():
 
     # look_at_download(parent_dir, archive)
     # extract_smallest_file(parent_dir, archive)
-    # extract_all_files(parent_dir, archive)
     # smallest_file_example(extracted_path)
-    process_whole_directory(parent_dir, extracted_archive)
+
+    # extract_all_files(parent_dir, archive)
+    process_for_images(parent_dir, extracted_path)
+    # process_for_metadata(parent_dir, extracted_path)
+
+    # compression_test(extracted_archive)
 
 
 if __name__ == '__main__':
