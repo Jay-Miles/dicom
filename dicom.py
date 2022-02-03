@@ -200,13 +200,15 @@ def make_images_folder(parent_dir):
     """ Make a new directory to hold images """
 
     new_dir = 'Images'
-    path = os.path.join(parent_dir, new_dir)
+    images_path = os.path.join(parent_dir, new_dir)
 
     try:
-        os.mkdir(path)
+        os.mkdir(images_path)
 
     except FileExistsError:
         pass
+
+    return images_path
 
 
 def process_whole_directory(parent_dir, extracted_archive):
@@ -216,8 +218,7 @@ def process_whole_directory(parent_dir, extracted_archive):
     """
 
     os.chdir(parent_dir)
-    make_images_folder(parent_dir)
-    images_path = os.path.join(parent_dir, 'Images')
+    images_path = make_images_folder(parent_dir)
 
     # Iterate over the extracted archive contents
     for root, dirs, files in os.walk(extracted_archive):
@@ -283,7 +284,7 @@ def compression_test(extracted_archive):
 
 
 def main():
-    parent_dir = 'C:\\Users\\Jay\\Projects\\dicom\\dicom'  # Archive location
+    parent_dir = '/home/jay/projects/dicom/dicom'  # Archive location
 
     archive = 'MammoTomoUPMC_Case6.tar.bz2'  # Downloaded archive file
 
@@ -294,7 +295,7 @@ def main():
     # extract_smallest_file(parent_dir, archive)
     # extract_all_files(parent_dir, archive)
     # smallest_file_example(extracted_path)
-    # process_whole_directory(parent_dir, extracted_archive)
+    process_whole_directory(parent_dir, extracted_archive)
 
 
 if __name__ == '__main__':
