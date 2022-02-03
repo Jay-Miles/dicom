@@ -22,6 +22,15 @@ Largest file is 640869820 bytes:
 Smallest file is 3262956 bytes:
 1.3.6.1.4.1.5962.99.1.2280943358.716200484.1363785608958.637.0.dcm
 
+
+CURRENT TASKS
+-Track time spent on this project: so far 2-3 days
+-We need compressed data to experiment with - try compressing and then
+decompressing some of the data we already have
+-Install DCMTK on work laptop - might need to use CMake, but there also
+should be an existing ubuntu package to just install...
+
+
 """
 
 
@@ -49,7 +58,7 @@ def look_at_download(parent_dir, archive):
     largest_file_size = 0
     largest_file = ''
 
-    smallest_file_size = 650000000
+    smallest_file_size = 650000000  # has to be > smallest file size
     smallest_file = ''
 
     # Iterate over all objects
@@ -62,10 +71,7 @@ def look_at_download(parent_dir, archive):
         if tarinfo.isreg():
             file_count += 1
 
-            print("File {a} is {b} bytes.".format(
-                a = tarinfo.name,
-                b = tarinfo.size
-                ))
+            print("File {} is {} bytes.".format(tarinfo.name, tarinfo.size))
 
             if tarinfo.size > largest_file_size:
                 largest_file_size = tarinfo.size
@@ -77,35 +83,35 @@ def look_at_download(parent_dir, archive):
 
         # Print the name of any directories
         elif tarinfo.isdir():
-            print("Directory {a}".format(a=tarinfo.name))
+            print("Directory {}".format(tarinfo.name))
 
         else:
-            print("{a} is not a file or directory.".format())
+            print("{} is not a file or directory.".format(tarinfo.name))
 
     # Close the archive
     tar.close()
 
     # Print info
-    print('{a} total items, {b} are files, {c} total bytes'.format(
-        a = object_count,
-        b = file_count,
-        c = total_size
+    print('{} total items, {} are files, {} total bytes'.format(
+        object_count,
+        file_count,
+        total_size
         ))
 
-    print('Largest file is {a} bytes: {b}'.format(
-        a = largest_file_size,
-        b = largest_file
+    print('Largest file is {} bytes: {}'.format(
+        largest_file_size,
+        largest_file
         ))
 
-    print('Smallest file is {a} bytes: {b}'.format(
-        a = smallest_file_size,
-        b = smallest_file
+    print('Smallest file is {} bytes: {}'.format(
+        smallest_file_size,
+        smallest_file
         ))
 
 
 def identify_largest_file(parent_dir, archive):
     """
-    Use the tarfile package to find the largest file in a .tar.bz2 archive.
+    Use the tarfile package to find the largest file in a .tar.bz2 archive
     """
 
     os.chdir(parent_dir)
@@ -135,7 +141,7 @@ def identify_smallest_file(extracted_path):
     smallest_file_size = 650000000
     smallest_file = ''
 
-    # Iterate over extracted archive and look only at files
+    # Iterate over extracted archive, look only at files
     for root, dirs, files in os.walk(extracted_path):
         for file in files:
 
@@ -164,8 +170,8 @@ def extract_all_files(parent_dir, archive):
 
 def smallest_file_example(extracted_path):
     """
-    Find the smallest file in a (previously extracted) .tar.bz2 archive,
-    convert it to an image array, and save it as a PNG.
+    Find the smallest file in a (already extracted) .tar.bz2 archive,
+    convert it to an image array, and save it as a PNG
     """
 
     filepath = identify_smallest_file(extracted_path)
@@ -206,7 +212,7 @@ def make_images_folder(parent_dir):
 def process_whole_directory(parent_dir, extracted_archive):
     """
     Iterate over the contents of a directory, convert each .dcm file to a
-    numpy array, and save as PNG image.
+    numpy array, and save as PNG image
     """
 
     os.chdir(parent_dir)
@@ -240,7 +246,7 @@ def process_whole_directory(parent_dir, extracted_archive):
 
                     # Save as .png in the Images directory
                     os.chdir(images_path)
-                    im.save('{a}.png'.format(a = filename))
+                    im.save('{}.png'.format(filename))
                     os.chdir(parent_dir)
 
                 # Deal with multiframe files
@@ -262,18 +268,26 @@ def process_whole_directory(parent_dir, extracted_archive):
                     i = 1
                     for frame in image_array:
                         im = Image.fromarray(np.uint8(frame))
-                        im.save('{0}_{1}.png'.format(filename, i))
+                        im.save('{}_{}.png'.format(filename, i))
                         i += 1
 
                     # Go back into the main project directory
                     os.chdir(parent_dir)
 
 
+def compression_test(extracted_archive):
+    """ Compress the extracted directory and re-archive as .tar.bz2, then
+    extract again and decompress to check no loss of data """
+
+    # I need CharPyLS for this but it is not co-operating
+
+
 def main():
     parent_dir = 'C:\\Users\\Jay\\Projects\\dicom\\dicom'  # Archive location
-    archive = 'MammoTomoUPMC_Case6.tar.bz2'  # Downloaded archive file
-    extracted_archive = 'Case6 [Case6]'  # Name of extracted archive folder
 
+    archive = 'MammoTomoUPMC_Case6.tar.bz2'  # Downloaded archive file
+
+    extracted_archive = 'Case6 [Case6]'  # Name of extracted archive folder
     extracted_path = os.path.join(parent_dir, extracted_archive)
 
     # look_at_download(parent_dir, archive)
