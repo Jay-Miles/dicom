@@ -115,51 +115,6 @@ def look_at_download(parent_dir, archive):
         ))
 
 
-def identify_largest_file(parent_dir, archive):
-    """ Use tarfile to find largest file in a .tar.bz2 archive """
-
-    os.chdir(parent_dir)
-
-    tar = tarfile.open(archive, 'r:bz2')
-
-    largest_file_size = 0
-    largest_file = ''
-
-    for tarinfo in tar:
-        if tarinfo.isreg():
-            if tarinfo.size < largest_file_size:
-                largest_file_size = tarinfo.size
-                largest_file = tarinfo.name
-
-    tar.close()
-
-    return largest_file
-
-
-def identify_smallest_file(extracted_path):
-    """ Use tarfile to find smallest file in a .tar.bz2 archive """
-
-    # Counter must start higher than largest file size
-    smallest_file_size = 650000000
-    smallest_file = ''
-
-    # Iterate over extracted archive, look only at files
-    for root, dirs, files in os.walk(extracted_path):
-        for file in files:
-
-            # Look at .dcm files, get their filepath and size
-            if file.lower().endswith('.dcm'):
-                filepath = os.path.join(root, file)
-                file_size = os.path.getsize(filepath)
-
-                # If they're smaller than the counter, update it
-                if file_size < smallest_file_size:
-                    smallest_file = filepath
-                    smallest_file_size = file_size
-
-    return smallest_file
-
-
 def extract_all_files(parent_dir, archive):
     """ Extract contents of .tar.bz2 archive into new directory """
 
@@ -168,34 +123,6 @@ def extract_all_files(parent_dir, archive):
     tar = tarfile.open(archive, 'r:bz2')
     tar.extractall()
     tar.close()
-
-
-def smallest_file_example(extracted_path):
-    """
-    Find the smallest file in a (already extracted) .tar.bz2 archive,
-    convert it to an image array, and save it as a PNG
-    """
-
-    filepath = identify_smallest_file(extracted_path)
-    filename = filepath.split('\\')[-1]
-    file_size = os.path.getsize(filepath)
-    print('smallest file ({} bytes): {}'.format(file_size, filename))
-    print('full path: {}'.format(filepath))
-
-    # Read in the dataset as binary using pydicom
-    with open(filepath, 'rb') as file_reader:
-        dataset = dcmread(file_reader)
-
-    # Get Pixel Data as numpy array using pydicom pixel_array syntax
-    image_array = dataset.pixel_array
-
-    if len(image_array.shape) == 2:  # if the file is not multiframe
-        im = Image.fromarray(np.uint8(image_array))
-        im.show()
-
-    elif len(image_array.shape) == 3:   # if the file IS multiframe
-        im = Image.fromarray(np.uint8(image_array[0]))
-        im.show()
 
 
 def make_new_folder(parent_dir, name):
@@ -368,9 +295,6 @@ def main():
     example_path = os.path.join(compression_path, example_file)
 
     # look_at_download(parent_dir, archive)
-    # extract_smallest_file(parent_dir, archive)
-    # smallest_file_example(extracted_path)
-
     # extract_all_files(parent_dir, archive)
     # process_for_images(images_path, extracted_path)
     # process_for_metadata(metadata_path, extracted_path)
