@@ -34,6 +34,7 @@ should be an existing ubuntu package to just install...
 """
 
 
+import jpeg_ls
 import numpy as np
 import os
 import subprocess
@@ -42,9 +43,13 @@ import tarfile
 from PIL import Image
 from pydicom import dcmread
 
+# from pydicom.uid import RLELossless
+# from pydicom.encaps import encapsulate, encapsulate_extended
+# from typing import List, Tuple
+
 
 def look_at_download(parent_dir, archive):
-    """ Use the tarfile package to examine contents of a .tar.bz2 archive """
+    """ Use tarfile to examine contents of a .tar.bz2 archive """
 
     os.chdir(parent_dir)
 
@@ -111,9 +116,7 @@ def look_at_download(parent_dir, archive):
 
 
 def identify_largest_file(parent_dir, archive):
-    """
-    Use the tarfile package to find the largest file in a .tar.bz2 archive
-    """
+    """ Use tarfile to find largest file in a .tar.bz2 archive """
 
     os.chdir(parent_dir)
 
@@ -134,9 +137,7 @@ def identify_largest_file(parent_dir, archive):
 
 
 def identify_smallest_file(extracted_path):
-    """
-    Use the tarfile package to find the smallest file in a .tar.bz2 archive.
-    """
+    """ Use tarfile to find smallest file in a .tar.bz2 archive """
 
     # Counter must start higher than largest file size
     smallest_file_size = 650000000
@@ -160,7 +161,7 @@ def identify_smallest_file(extracted_path):
 
 
 def extract_all_files(parent_dir, archive):
-    """ Extract all contents of a .tar.bz2 archive into a new directory. """
+    """ Extract contents of .tar.bz2 archive into new directory """
 
     os.chdir(parent_dir)
 
@@ -197,43 +198,23 @@ def smallest_file_example(extracted_path):
         im.show()
 
 
-def make_images_folder(parent_dir):
-    """ Make a new directory to hold images """
+def make_new_folder(parent_dir, name):
+    """ Make a new directory and return its path """
 
-    new_dir = 'Images'
-    images_path = os.path.join(parent_dir, new_dir)
+    new_dir = os.path.join(parent_dir, name)
 
     try:
-        os.mkdir(images_path)
+        os.mkdir(new_dir)
 
     except FileExistsError:
         pass
 
-    return images_path
+    return new_dir
 
 
-def make_metadata_folder(parent_dir):
-    """ Make a new directory to hold metadata files """
-
-    new_dir = 'Metadata'
-    metadata_path = os.path.join(parent_dir, new_dir)
-
-    try:
-        os.mkdir(metadata_path)
-
-    except FileExistsError:
-        pass
-
-    return metadata_path
-
-
-def process_for_images(parent_dir, extracted_path):
-    """
-    Iterate over the contents of a directory, convert each .dcm file to a
-    numpy array, and save as PNG image
-    """
-
-    images_path = make_images_folder(parent_dir)
+def process_for_images(images_path, extracted_path):
+    """ Iterate over contents of a directory, convert each .dcm file to
+    a numpy array, save as PNG image """
 
     # Iterate over the extracted archive contents
     for root, dirs, files in os.walk(extracted_path):
@@ -270,8 +251,7 @@ def process_for_images(parent_dir, extracted_path):
                 if len(image_array.shape) == 3:
 
                     # Create a new subdirectory to hold the images
-                    file_dir = '{}'.format(filename)
-                    file_dir_path = os.path.join(images_path, file_dir)
+                    file_dir_path = os.path.join(images_path, filename)
 
                     try:
                         os.mkdir(file_dir_path)
@@ -290,11 +270,9 @@ def process_for_images(parent_dir, extracted_path):
                         i += 1
 
 
-def process_for_metadata(parent_dir, extracted_path):
+def process_for_metadata(metadata_path, extracted_path):
     """ Iterate over the contents of a directory and dump the metadata
     for each .dcm file """
-
-    metadata_path = make_metadata_folder(parent_dir)
 
     # Iterate over the extracted archive contents
     for root, dirs, files in os.walk(extracted_path):
@@ -305,7 +283,7 @@ def process_for_metadata(parent_dir, extracted_path):
             # Look only at .dcm files
             if file.lower().endswith('.dcm'):
 
-                # Read in the dataset as binary using pydicom
+                # Use dcmdump to output the file contents
                 old_filepath = os.path.join(root, file)
                 new_filename = file[:-4] + '.txt'
                 new_filepath = os.path.join(metadata_path, new_filename)
@@ -320,34 +298,85 @@ def process_for_metadata(parent_dir, extracted_path):
 
                 dcm_text = dcm_dump.stdout
 
+                # Write this to a text file
                 with open(new_filepath, 'w') as file_writer:
                     file_writer.write(dcm_text)
 
 
-def compression_test(extracted_archive):
-    """ Compress the extracted directory and re-archive as .tar.bz2, then
-    extract again and decompress to check no loss of data """
+def compression_test(compression_path, example_path):
+    """ Compress an example .dcm file, then decompress again to check
+    for data loss. Uses RLELossLess and definitely loses data """
 
-    # Use CharPyLS
+    # Define the file to use
+    original_file = example_path
+    original_file_size = os.path.getsize(original_file)
+    print('Original file size: {}'.format(original_file_size))
+
+    # Create a compressed RLELossLess file with dcmtk
+    compressed_file = os.path.join(
+        compression_path,
+        'after_compression.dcm'
+        )
+
+    compress_command = ['dcmcrle', original_file, compressed_file]
+    subprocess.run(compress_command)
+
+    # Look at the compressed file size
+    compressed_file_size = os.path.getsize(compressed_file)
+    print('Compressed file size: {}'.format(compressed_file_size))
+
+    # Create a re-decompressed file with dcmtk
+    decompressed_file = os.path.join(
+        compression_path,
+        'after_decompression.dcm'
+        )
+
+    decompress_command = ['dcmdrle', compressed_file, decompressed_file]
+    subprocess.run(decompress_command)
+
+    # Look at the decompressed file size
+    decompressed_file_size = os.path.getsize(decompressed_file)
+    print('Decompressed file size: {}'.format(decompressed_file_size))
+
+
+def compress_all_dcm(extracted_path):
+    """ """
+
+    placeholder = ''
+
+    # # Iterate over the extracted archive contents
+    # for each, create a compressed version and store in a new directory
+    # once all files are compressed, convert directory to .tar.bz2
+    # re-extract the archive
+    # decompress each file in the archive
+    # check that no information has been lost - how? file size?
+
+    return placeholder
 
 
 def main():
     parent_dir = '/home/jay/projects/dicom/dicom'  # Archive location
-
     archive = 'MammoTomoUPMC_Case6.tar.bz2'  # Downloaded archive file
-
     extracted_archive = 'Case6 [Case6]'  # Name of extracted archive folder
+
     extracted_path = os.path.join(parent_dir, extracted_archive)
+    images_path = make_new_folder(parent_dir, 'Images')
+    metadata_path = make_new_folder(parent_dir, 'Metadata')
+    compression_path = make_new_folder(parent_dir, 'compression_test')
+
+    example_file = '1.3.6.1.4.1.5962.99.1.2280943358.716200484.1363785608958.637.0.dcm'
+    example_path = os.path.join(compression_path, example_file)
 
     # look_at_download(parent_dir, archive)
     # extract_smallest_file(parent_dir, archive)
     # smallest_file_example(extracted_path)
 
     # extract_all_files(parent_dir, archive)
-    process_for_images(parent_dir, extracted_path)
-    # process_for_metadata(parent_dir, extracted_path)
+    # process_for_images(images_path, extracted_path)
+    # process_for_metadata(metadata_path, extracted_path)
 
-    # compression_test(extracted_archive)
+    compression_test(compression_path, example_path)
+    # compress_all_dcm(extracted_path)
 
 
 if __name__ == '__main__':
