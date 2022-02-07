@@ -41,9 +41,9 @@ import subprocess
 import tarfile
 
 from PIL import Image
-from pydicom import dcmread
+from pydicom import dcmread, dcmwrite
+from pydicom.uid import RLELossless
 
-# from pydicom.uid import RLELossless
 # from pydicom.encaps import encapsulate, encapsulate_extended
 # from typing import List, Tuple
 
@@ -230,7 +230,7 @@ def process_for_metadata(metadata_path, extracted_path):
                     file_writer.write(dcm_text)
 
 
-def compression_test(compression_path, example_path):
+def compress_with_dcmtk(compression_path, example_path):
     """ Compress an example .dcm file, then decompress again to check
     for data loss. Uses RLELossLess and definitely loses data """
 
@@ -266,19 +266,74 @@ def compression_test(compression_path, example_path):
     print('Decompressed file size: {}'.format(decompressed_file_size))
 
 
-def compress_all_dcm(extracted_path):
-    """ """
+def compress_with_charpyls(compression_path, example_path):
+    """ compress and then decompress an example .dcm file with the
+    CharPyLS package """
 
-    placeholder = ''
+    # Define the file to use and read in data
+    original_file_size = os.path.getsize(example_path)
+    print('Original file size: {}'.format(original_file_size))
 
-    # # Iterate over the extracted archive contents
-    # for each, create a compressed version and store in a new directory
-    # once all files are compressed, convert directory to .tar.bz2
-    # re-extract the archive
-    # decompress each file in the archive
-    # check that no information has been lost - how? file size?
+    with open(example_path, 'rb') as reader:
+        ds = dcmread(reader)
 
-    return placeholder
+    original_array = ds.pixel_array
+
+    # Check the values of specified fields are suitable for JPEGLSLossLess TSUID
+    fields = [
+        ('PhotometricInterpretation', ['MONOCHROME1', 'MONOCHROME2']),
+        ('TransferSyntaxUID', ['any']),
+        ('SamplesPerPixel', ['1']),
+        ('PlanarConfiguration', ['absent']),
+        ('PixelRepresentation', ['0', '1']),
+        ('BitsAllocated', ['8', '16']),
+        ('BitsStored', [str(number) for number in range(2, 17)]),
+        ('HighBit', [str(number) for number in range(1, 16)]),
+        ]
+
+    not_in_ds = []
+
+    for field in fields:
+        try:
+            field_name = field[0]
+            print(ds[field_name])
+
+        except KeyError:
+            not_in_ds.append(field[0])
+
+    print('Fields not in dataset: {}'.format(not_in_ds))
+
+    # Compress pixel array with CharPyLS and replace PixelData
+    compressed_array = jpeg_ls.encode(original_array)
+    ds.PixelData = compressed_array
+
+    # Change the necessary data elements
+    ds.file_meta.TransferSyntaxUID = 'JPEG​LS​Lossless'
+    # ds.is_little_endian =
+    # ds.is_implicit_VR =
+
+    # Write the modified dataset to a file
+    compressed_file = os.path.join(
+        compression_path,
+        'after_compression.dcm'
+        )
+
+    with open(compressed_file, 'wb') as writer:
+        ds.write(writer, write_like_original = False)
+
+    # Look at the compressed file size
+    compressed_file_size = os.path.getsize(compressed_file)
+    print('Compressed file size: {}'.format(compressed_file_size))
+
+    # # Create a re-decompressed file with dcmtk
+    # decompressed_file = os.path.join(
+    #     compression_path,
+    #     'after_decompression.dcm'
+    #     )
+
+    # # Look at the decompressed file size
+    # decompressed_file_size = os.path.getsize(decompressed_file)
+    # print('Decompressed file size: {}'.format(decompressed_file_size))
 
 
 def main():
@@ -299,8 +354,8 @@ def main():
     # process_for_images(images_path, extracted_path)
     # process_for_metadata(metadata_path, extracted_path)
 
-    compression_test(compression_path, example_path)
-    # compress_all_dcm(extracted_path)
+    # compress_with_dcmtk(compression_path, example_path)
+    compress_with_charpyls(compression_path, example_path)
 
 
 if __name__ == '__main__':
