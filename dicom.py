@@ -289,6 +289,8 @@ def compress_with_charpyls(compression_path, example_path):
         ('BitsAllocated', ['8', '16']),
         ('BitsStored', [str(number) for number in range(2, 17)]),
         ('HighBit', [str(number) for number in range(1, 16)]),
+        ('IsLittleEndian', [])
+        ('IsImplicitVR', [])
         ]
 
     not_in_ds = []
@@ -309,7 +311,7 @@ def compress_with_charpyls(compression_path, example_path):
 
     # Change the necessary data elements
     ds.file_meta.TransferSyntaxUID = 'JPEG​LS​Lossless'
-    # ds.is_little_endian =
+    # ds.is_little_endian = True
     # ds.is_implicit_VR =
 
     # Write the modified dataset to a file
@@ -319,7 +321,7 @@ def compress_with_charpyls(compression_path, example_path):
         )
 
     with open(compressed_file, 'wb') as writer:
-        ds.write(writer, write_like_original = False)
+        dcmwrite(writer, ds, write_like_original = False)
 
     # Look at the compressed file size
     compressed_file_size = os.path.getsize(compressed_file)
