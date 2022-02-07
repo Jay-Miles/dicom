@@ -235,8 +235,7 @@ def compress_with_dcmtk(compression_path, example_path):
     for data loss. Uses RLELossLess and definitely loses data """
 
     # Define the file to use
-    original_file = example_path
-    original_file_size = os.path.getsize(original_file)
+    original_file_size = os.path.getsize(example_path)
     print('Original file size: {}'.format(original_file_size))
 
     # Create a compressed RLELossLess file with dcmtk
@@ -245,7 +244,7 @@ def compress_with_dcmtk(compression_path, example_path):
         'after_compression.dcm'
         )
 
-    compress_command = ['dcmcrle', original_file, compressed_file]
+    compress_command = ['dcmcrle', example_path, compressed_file]
     subprocess.run(compress_command)
 
     # Look at the compressed file size
@@ -279,42 +278,14 @@ def compress_with_charpyls(compression_path, example_path):
 
     original_array = ds.pixel_array
 
-    # Check the values of specified fields are suitable for JPEGLSLossLess TSUID
-    fields = [
-        ('PhotometricInterpretation', ['MONOCHROME1', 'MONOCHROME2']),
-        ('TransferSyntaxUID', ['any']),
-        ('SamplesPerPixel', ['1']),
-        ('PlanarConfiguration', ['absent']),
-        ('PixelRepresentation', ['0', '1']),
-        ('BitsAllocated', ['8', '16']),
-        ('BitsStored', [str(number) for number in range(2, 17)]),
-        ('HighBit', [str(number) for number in range(1, 16)]),
-        ('IsLittleEndian', [])
-        ('IsImplicitVR', [])
-        ]
+    print('original array type: {}'.format(original_array.shape))
+    print('original array shape: {}'.format(type(original_array)))
+    print('original array: {}'.format(original_array))
 
-    not_in_ds = []
-
-    for field in fields:
-        try:
-            field_name = field[0]
-            print(ds[field_name])
-
-        except KeyError:
-            not_in_ds.append(field[0])
-
-    print('Fields not in dataset: {}'.format(not_in_ds))
-
-    # Compress pixel array with CharPyLS and replace PixelData
+    # Create a compressed array and write compressed .dcm file
     compressed_array = jpeg_ls.encode(original_array)
     ds.PixelData = compressed_array
 
-    # Change the necessary data elements
-    ds.file_meta.TransferSyntaxUID = 'JPEG​LS​Lossless'
-    # ds.is_little_endian = True
-    # ds.is_implicit_VR =
-
-    # Write the modified dataset to a file
     compressed_file = os.path.join(
         compression_path,
         'after_compression.dcm'
@@ -323,19 +294,26 @@ def compress_with_charpyls(compression_path, example_path):
     with open(compressed_file, 'wb') as writer:
         dcmwrite(writer, ds, write_like_original = False)
 
-    # Look at the compressed file size
     compressed_file_size = os.path.getsize(compressed_file)
     print('Compressed file size: {}'.format(compressed_file_size))
 
-    # # Create a re-decompressed file with dcmtk
-    # decompressed_file = os.path.join(
-    #     compression_path,
-    #     'after_decompression.dcm'
-    #     )
+    # Decompress array and write to file
+    decompressed_array = jpeg_ls.decode(compressed_array)
+    ds.PixelData = decompressed_array
 
-    # # Look at the decompressed file size
-    # decompressed_file_size = os.path.getsize(decompressed_file)
-    # print('Decompressed file size: {}'.format(decompressed_file_size))
+    decompressed_file = os.path.join(
+        compression_path,
+        'after_decompression.dcm'
+        )
+
+    with open(decompressed_file, 'wb') as writer:
+        dcmwrite(writer, ds, write_like_original = False)
+
+    decompressed_file_size = os.path.getsize(decompressed_file)
+    print('Decompressed file size: {}'.format(decompressed_file_size))
+
+    if (original_array == decompressed_array).all():
+        print('original and decompressed arrays are identical')
 
 
 def main():
