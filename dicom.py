@@ -22,19 +22,10 @@ Largest file is 640869820 bytes:
 Smallest file is 3262956 bytes:
 1.3.6.1.4.1.5962.99.1.2280943358.716200484.1363785608958.637.0.dcm
 
-
-CURRENT TASKS
--Track time spent on this project: so far 2-3 days
--We need compressed data to experiment with - try compressing and then
-decompressing some of the data we already have
--Install DCMTK on work laptop - might need to use CMake, but there also
-should be an existing ubuntu package to just install...
-
-
 """
 
 
-import jpeg_ls
+import jpeg_ls  # This is actually CharPyLS with an annoying naming convention
 import numpy as np
 import os
 import subprocess
@@ -42,10 +33,6 @@ import tarfile
 
 from PIL import Image
 from pydicom import dcmread, dcmwrite
-from pydicom.uid import RLELossless
-
-# from pydicom.encaps import encapsulate, encapsulate_extended
-# from typing import List, Tuple
 
 
 def look_at_download(parent_dir, archive):
@@ -371,7 +358,7 @@ def compress_with_charpyls(compression_path, example_path):
     # with open(compressed_file, 'rb') as reader:
     #     ds2 = dcmread(reader)
 
-    # test_array = ds2.pixel_array  # fails here because pixel data is too short
+    # test_array = ds2.pixel_array  # fails here, pixel data is too short?
     # test_decompression = jpeg_ls.decode(test_array)
     # ds2.PixelData = test_decompression
 
@@ -402,7 +389,7 @@ def main():
     example_path = os.path.join(compression_path, example_file)
 
     # compress_with_dcmtk(compression_path, example_path)
-    compress_with_charpyls(compression_path, example_path)
+    # compress_with_charpyls(compression_path, example_path)
 
 
 if __name__ == '__main__':
