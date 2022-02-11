@@ -154,13 +154,26 @@ def process_for_images(images_path, extracted_path):
 
                 # Read in the dataset as binary using pydicom
                 filepath = os.path.join(root, file)
-                filename = file[:-4]
 
                 with open(filepath, 'rb') as file_reader:
-                    dataset = dcmread(file_reader)
+                    ds = dcmread(file_reader)
+
+                # Get acquisition date and patient name, create file title
+                # Use file UID for example files, as all have same pt name
+
+                # pt_name = ds['PatientName']
+                pt_name = ds['SOPInstanceUID'][-5:-2]
+
+                image_date = ds['AcquisitionDate'][:]
+                image_time = ds['AcquisitionTime'][:-4]
+
+                title = '{}_{}_{}'.format(
+                    image_date,
+                    image_time,
+                    pt_name)
 
                 # Get Pixel Data as array from pixel_array element
-                image_array = dataset.pixel_array
+                image_array = ds.pixel_array
 
                 # Deal with single-frame files
                 if len(image_array.shape) == 2:
@@ -169,16 +182,15 @@ def process_for_images(images_path, extracted_path):
                     im = Image.fromarray(np.uint8(image_array))
 
                     # Save as .png in the Images directory
-                    im_filename = filename + '.png'
+                    im_filename = '{}.png'.format(title)
                     im_path = os.path.join(images_path, im_filename)
-
                     im.save(im_path)
 
                 # Deal with multiframe files
-                if len(image_array.shape) == 3:
+                elif len(image_array.shape) == 3:
 
                     # Create a new subdirectory to hold the images
-                    file_dir_path = os.path.join(images_path, filename)
+                    file_dir_path = os.path.join(images_path, title)
 
                     try:
                         os.mkdir(file_dir_path)
@@ -190,7 +202,7 @@ def process_for_images(images_path, extracted_path):
                     for frame in image_array:
                         im = Image.fromarray(np.uint8(frame))
 
-                        im_filename = '{}_{}.png'.format(filename, i)
+                        im_filename = '{}_frame_{}.png'.format(title, i)
                         im_path = os.path.join(file_dir_path, im_filename)
                         im.save(im_path)
 
@@ -199,7 +211,9 @@ def process_for_images(images_path, extracted_path):
 
 def process_for_metadata(metadata_path, extracted_path):
     """ Iterate over the contents of a directory and dump the metadata
-    for each .dcm file """
+    for each .dcm file. N.B. single- and multi-frame files don't need to
+    be dealt with differently, as this only affects PixelData (which
+    doesn't get output here) """
 
     # Iterate over the extracted archive contents
     for root, dirs, files in os.walk(extracted_path):
@@ -210,12 +224,37 @@ def process_for_metadata(metadata_path, extracted_path):
             # Look only at .dcm files
             if file.lower().endswith('.dcm'):
 
-                # Use dcmdump to output the file contents
-                old_filepath = os.path.join(root, file)
-                new_filename = file[:-4] + '.txt'
-                new_filepath = os.path.join(metadata_path, new_filename)
+                # Read in the dataset
+                filepath = os.path.join(root, file)
 
-                dcm_call = ['dcmdump', '-M', str(old_filepath)]
+                with open(filepath, 'rb') as file_reader:
+                    ds = dcmread(file_reader)
+
+                # Get details to construct filename
+                # Use file UID for example files, as all have same pt name
+
+                # pt_name = ds['PatientName']
+                pt_name = ds['SOPInstanceUID'][-5:-2]
+
+                image_date = ds['AcquisitionDate'][:]
+                image_time = ds['AcquisitionTime'][:-4]
+
+                if len(ds.pixel_array.shape) == 2:
+                    frames = 'single_frame'
+                elif len(ds.pixel_array.shape) == 3:
+                    frames = 'multi_frame'
+
+                filename = '{}_{}_{}_{}.txt'.format(
+                    image_date,
+                    image_time,
+                    pt_name,
+                    frames,
+                    )
+
+                new_filepath = os.path.join(metadata_path, filename)
+
+                # Run dcmdump via command line to get text output
+                dcm_call = ['dcmdump', '-M', str(filepath)]
 
                 dcm_dump = subprocess.run(
                     dcm_call,
@@ -332,10 +371,10 @@ def main():
     # look_at_download(parent_dir, archive)
     # extract_all_files(parent_dir, archive)
     # process_for_images(images_path, extracted_path)
-    # process_for_metadata(metadata_path, extracted_path)
+    process_for_metadata(metadata_path, extracted_path)
 
     # compress_with_dcmtk(compression_path, example_path)
-    compress_with_charpyls(compression_path, example_path)
+    # compress_with_charpyls(compression_path, example_path)
 
 
 if __name__ == '__main__':
