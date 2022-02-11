@@ -159,10 +159,9 @@ def process_for_images(images_path, extracted_path):
                     ds = dcmread(file_reader)
 
                 # Get acquisition date and patient name, create file title
-                # Use file UID for example files, as all have same pt name
 
-                # pt_name = ds['PatientName']
-                pt_name = ds['SOPInstanceUID'][-5:-2]
+                # pt_name = ds['PatientName']  # use this for actual pt files
+                pt_name = ds['SOPInstanceUID'][-5:-2]  # use for example files
 
                 image_date = ds['AcquisitionDate'][:]
                 image_time = ds['AcquisitionTime'][:-4]
@@ -231,10 +230,9 @@ def process_for_metadata(metadata_path, extracted_path):
                     ds = dcmread(file_reader)
 
                 # Get details to construct filename
-                # Use file UID for example files, as all have same pt name
 
-                # pt_name = ds['PatientName']
-                pt_name = ds['SOPInstanceUID'][-5:-2]
+                # pt_name = ds['PatientName']  # use this for actual pt files
+                pt_name = ds['SOPInstanceUID'][-5:-2]  # use for example files
 
                 image_date = ds['AcquisitionDate'][:]
                 image_time = ds['AcquisitionTime'][:-4]
@@ -271,7 +269,14 @@ def process_for_metadata(metadata_path, extracted_path):
 
 def compress_with_dcmtk(compression_path, example_path):
     """ Compress an example .dcm file, then decompress again to check
-    for data loss. Uses RLELossLess and definitely loses data """
+    for data loss. Loses 170 bytes of data. Uses RLELossLess
+    (de)compression via dcm toolkit (dcmtk), which is run from the
+    command line.
+
+    Original file size:     3262956
+    Compressed file size:   3063770
+    Decompressed file size: 3262786
+    """
 
     # Define the file to use
     original_file_size = os.path.getsize(example_path)
@@ -290,7 +295,7 @@ def compress_with_dcmtk(compression_path, example_path):
     compressed_file_size = os.path.getsize(compressed_file)
     print('Compressed file size: {}'.format(compressed_file_size))
 
-    # Create a re-decompressed file with dcmtk
+    # Decompress the compressed file with dcmtk
     decompressed_file = os.path.join(
         compression_path,
         'after_decompression.dcm'
@@ -305,8 +310,14 @@ def compress_with_dcmtk(compression_path, example_path):
 
 
 def compress_with_charpyls(compression_path, example_path):
-    """ compress and then decompress an example .dcm file with the
-    CharPyLS package """
+    """ (De)compression using JPEGLSLOsslessa via the CharPyLS package.
+    Package must be installed directly from GitHub repo, not via pip.
+
+    Compressing and then decompressing the array in-place, without
+    writing out to a compressed file and reading in again to decompress,
+    results in no loss of data and the original and final arrays are
+    identical.
+    """
 
     # Define the file to use and read in data
     original_file_size = os.path.getsize(example_path)
@@ -317,14 +328,11 @@ def compress_with_charpyls(compression_path, example_path):
 
     original_array = ds.pixel_array
 
-    print('original array type: {}'.format(original_array.shape))
-    print('original array shape: {}'.format(type(original_array)))
-    print('original array: {}'.format(original_array))
-
-    # Create a compressed array and write compressed .dcm file
+    # Compress the PixelData array
     compressed_array = jpeg_ls.encode(original_array)
     ds.PixelData = compressed_array
 
+    # Write the dataset with compressed array to file
     compressed_file = os.path.join(
         compression_path,
         'after_compression.dcm'
@@ -333,13 +341,15 @@ def compress_with_charpyls(compression_path, example_path):
     with open(compressed_file, 'wb') as writer:
         dcmwrite(writer, ds, write_like_original = False)
 
+    # Get the size of the file with compressed array
     compressed_file_size = os.path.getsize(compressed_file)
     print('Compressed file size: {}'.format(compressed_file_size))
 
-    # Decompress array and write to file
+    # Decompress existing array (don't read in compressed file)
     decompressed_array = jpeg_ls.decode(compressed_array)
     ds.PixelData = decompressed_array
 
+    # Write dataset with decompressed array to file
     decompressed_file = os.path.join(
         compression_path,
         'after_decompression.dcm'
@@ -348,33 +358,51 @@ def compress_with_charpyls(compression_path, example_path):
     with open(decompressed_file, 'wb') as writer:
         dcmwrite(writer, ds, write_like_original = False)
 
+    # Get the size of the file with decompressed array
     decompressed_file_size = os.path.getsize(decompressed_file)
     print('Decompressed file size: {}'.format(decompressed_file_size))
 
+    # Confirm that the original and decompressed array are identical
     if (original_array == decompressed_array).all():
         print('original and decompressed arrays are identical')
+
+
+    # # Try reading in compressed file and decompressing, then writing out
+    # with open(compressed_file, 'rb') as reader:
+    #     ds2 = dcmread(reader)
+
+    # test_array = ds2.pixel_array  # fails here because pixel data is too short
+    # test_decompression = jpeg_ls.decode(test_array)
+    # ds2.PixelData = test_decompression
+
+    # second_decmpn = os.path.join(compression_path, 'second_decmpn.dcm')
+
+    # with open(second_decmpn, 'wb') as writer:
+    #     dcmwrite(writer, ds2, write_like_original = False)
 
 
 def main():
     parent_dir = '/home/jay/projects/dicom/dicom'  # Archive location
     archive = 'MammoTomoUPMC_Case6.tar.bz2'  # Downloaded archive file
-    extracted_archive = 'Case6 [Case6]'  # Name of extracted archive folder
-
-    extracted_path = os.path.join(parent_dir, extracted_archive)
-    images_path = make_new_folder(parent_dir, 'Images')
-    metadata_path = make_new_folder(parent_dir, 'Metadata')
-    compression_path = make_new_folder(parent_dir, 'compression_test')
-
-    example_file = '1.3.6.1.4.1.5962.99.1.2280943358.716200484.1363785608958.637.0.dcm'
-    example_path = os.path.join(compression_path, example_file)
 
     # look_at_download(parent_dir, archive)
     # extract_all_files(parent_dir, archive)
+
+    extracted_archive = 'Case6 [Case6]'  # Name of extracted archive folder
+    extracted_path = os.path.join(parent_dir, extracted_archive)
+
+    images_path = make_new_folder(parent_dir, 'Images')
+    metadata_path = make_new_folder(parent_dir, 'Metadata')
+
     # process_for_images(images_path, extracted_path)
-    process_for_metadata(metadata_path, extracted_path)
+    # process_for_metadata(metadata_path, extracted_path)
+
+    compression_path = make_new_folder(parent_dir, 'compression_test')
+    example_file = '1.3.6.1.4.1.5962.99.1.2280943358.716200484.1363785608958.637.0.dcm'
+    example_path = os.path.join(compression_path, example_file)
 
     # compress_with_dcmtk(compression_path, example_path)
-    # compress_with_charpyls(compression_path, example_path)
+    compress_with_charpyls(compression_path, example_path)
 
 
 if __name__ == '__main__':
