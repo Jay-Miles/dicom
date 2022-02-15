@@ -25,7 +25,7 @@ Smallest file is 3262956 bytes:
 """
 
 
-import jpeg_ls  # This is actually CharPyLS with an annoying naming convention
+# import jpeg_ls  # This is actually CharPyLS with an annoying naming convention
 import numpy as np
 import os
 import subprocess
@@ -126,12 +126,12 @@ def make_new_folder(parent_dir, name):
     return new_dir
 
 
-def process_for_images(images_path, extracted_path):
+def process_for_images(original_files, original_images):
     """ Iterate over contents of a directory, convert each .dcm file to
     a numpy array, save as PNG image """
 
     # Iterate over the extracted archive contents
-    for root, dirs, files in os.walk(extracted_path):
+    for root, dirs, files in os.walk(original_files):
 
         # Look only at files
         for file in files:
@@ -169,14 +169,14 @@ def process_for_images(images_path, extracted_path):
 
                     # Save as .png in the Images directory
                     im_filename = '{}.png'.format(title)
-                    im_path = os.path.join(images_path, im_filename)
+                    im_path = os.path.join(original_images, im_filename)
                     im.save(im_path)
 
                 # Deal with multiframe files
                 elif len(image_array.shape) == 3:
 
                     # Create a new subdirectory to hold the images
-                    file_dir_path = os.path.join(images_path, title)
+                    file_dir_path = os.path.join(original_images, title)
 
                     try:
                         os.mkdir(file_dir_path)
@@ -195,14 +195,14 @@ def process_for_images(images_path, extracted_path):
                         i += 1
 
 
-def process_for_metadata(metadata_path, extracted_path):
+def process_for_metadata(original_files, original_metadata):
     """ Iterate over the contents of a directory and dump the metadata
     for each .dcm file. N.B. single- and multi-frame files don't need to
     be dealt with differently, as this only affects PixelData (which
     doesn't get output here) """
 
     # Iterate over the extracted archive contents
-    for root, dirs, files in os.walk(extracted_path):
+    for root, dirs, files in os.walk(original_files):
 
         # Look only at files
         for file in files:
@@ -213,8 +213,8 @@ def process_for_metadata(metadata_path, extracted_path):
                 # Read in the dataset
                 filepath = os.path.join(root, file)
 
-                with open(filepath, 'rb') as file_reader:
-                    ds = dcmread(file_reader)
+                with open(filepath, 'rb') as reader:
+                    ds = dcmread(reader)
 
                 # Get details to construct filename
 
@@ -236,7 +236,7 @@ def process_for_metadata(metadata_path, extracted_path):
                     frames,
                     )
 
-                new_filepath = os.path.join(metadata_path, filename)
+                new_filepath = os.path.join(original_metadata, filename)
 
                 # Run dcmdump via command line to get text output
                 dcm_call = ['dcmdump', '-M', str(filepath)]
@@ -250,8 +250,60 @@ def process_for_metadata(metadata_path, extracted_path):
                 dcm_text = dcm_dump.stdout
 
                 # Write this to a text file
-                with open(new_filepath, 'w') as file_writer:
-                    file_writer.write(dcm_text)
+                with open(new_filepath, 'w') as writer:
+                    writer.write(dcm_text)
+
+
+def dcmcjpls_compress(original_files, compressed_files):
+    """ Compress dcm files using dcmcjpls for JPEG-LS compression """
+
+    # Iterate over the extracted archive contents
+    for root, dirs, files in os.walk(original_files):
+
+        # Look only at files
+        for file in files:
+
+            # Look only at .dcm files
+            if file.lower().endswith('.dcm'):
+
+                filepath = os.path.join(root, file)
+
+                # Get details to construct filename
+
+                with open(filepath, 'rb') as reader:
+                    ds = dcmread(reader)
+
+                # pt_name = ds['PatientName']  # use this for actual pt files
+                pt_name = ds['SOPInstanceUID'][-5:-2]  # use for example files
+                image_date = ds['AcquisitionDate'][:]
+                image_time = ds['AcquisitionTime'][:-4]
+
+                if len(ds.pixel_array.shape) == 2:
+                    frames = 'single_frame'
+                elif len(ds.pixel_array.shape) == 3:
+                    frames = 'multi_frame'
+
+                filename = '{}_{}_{}_{}.txt'.format(
+                    image_date,
+                    image_time,
+                    pt_name,
+                    frames,
+                    )
+
+                output_path = os.path.join(compressed_files, filename)
+
+                # Run dcmdump via command line to get text output
+                subprocess.run(['dcmcjpls', filepath, output_path])
+
+                # Compare the original and compressed files
+                original_size = os.path.getsize(filepath)
+                compress_size = os.path.getsize(output_path)
+
+                print('Original size: {}'.format(original_size))
+                print('Compressed size: {}'.format(compress_size))
+
+            break
+        break
 
 
 def compress_with_dcmtk(compression_path, example_path):
@@ -354,39 +406,27 @@ def compress_with_charpyls(compression_path, example_path):
         print('original and decompressed arrays are identical')
 
 
-    # # Try reading in compressed file and decompressing, then writing out
-    # with open(compressed_file, 'rb') as reader:
-    #     ds2 = dcmread(reader)
-
-    # test_array = ds2.pixel_array  # fails here, pixel data is too short?
-    # test_decompression = jpeg_ls.decode(test_array)
-    # ds2.PixelData = test_decompression
-
-    # second_decmpn = os.path.join(compression_path, 'second_decmpn.dcm')
-
-    # with open(second_decmpn, 'wb') as writer:
-    #     dcmwrite(writer, ds2, write_like_original = False)
-
-
 def main():
     parent_dir = '/home/jay/projects/dicom/dicom'  # Archive location
-    archive = 'MammoTomoUPMC_Case6.tar.bz2'  # Downloaded archive file
-
-    # look_at_download(parent_dir, archive)
     # extract_all_files(parent_dir, archive)
 
+    archive = 'MammoTomoUPMC_Case6.tar.bz2'  # Downloaded archive file
+    # look_at_download(parent_dir, archive)
+
     extracted_archive = 'Case6 [Case6]'  # Name of extracted archive folder
-    extracted_path = os.path.join(parent_dir, extracted_archive)
+    original_files = os.path.join(parent_dir, extracted_archive)
 
-    images_path = make_new_folder(parent_dir, 'Images')
-    metadata_path = make_new_folder(parent_dir, 'Metadata')
+    original_metadata = make_new_folder(parent_dir, 'original_metadata')
+    # process_for_metadata(original_files, original_metadata)
 
-    # process_for_images(images_path, extracted_path)
-    # process_for_metadata(metadata_path, extracted_path)
+    original_images = make_new_folder(parent_dir, 'original_images')
+    # process_for_images(original_files, original_images)
 
-    compression_path = make_new_folder(parent_dir, 'compression_test')
-    example_file = '1.3.6.1.4.1.5962.99.1.2280943358.716200484.1363785608958.637.0.dcm'
-    example_path = os.path.join(compression_path, example_file)
+    compressed_files = make_new_folder(parent_dir, 'compressed_files')
+    dcmcjpls_compress(original_files, compressed_files)
+
+    # example_file = '1.3.6.1.4.1.5962.99.1.2280943358.716200484.1363785608958.637.0.dcm'
+    # example_path = os.path.join(compression_path, example_file)
 
     # compress_with_dcmtk(compression_path, example_path)
     # compress_with_charpyls(compression_path, example_path)
