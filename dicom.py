@@ -142,28 +142,101 @@ def construct_filename(dcm_filepath, suffix):
     with open(dcm_filepath, 'rb') as reader:
         ds = dcmread(reader)
 
-    # Get the image acquisition date and time, and the patient name
-    image_date = ds['AcquisitionDate'][:]
-    image_time = ds['AcquisitionTime'][:-4]
+    # Get details from dataset to construct filename
+    image_date = ds['ContentDate'].value
+    study_type = ds['StudyDescription'].value
     # pt_name = ds['PatientName']  # use this for actual pt files
-    pt_name = ds['SOPInstanceUID'][-5:-2]  # use for example files
+    pt_name = ds['SOPInstanceUID'][-7:]  # use this for test files
 
-    # Determine whether file is single- or multi-frame
-    if len(ds.pixel_array.shape) == 2:
-        frames = 'single_frame'
-    elif len(ds.pixel_array.shape) == 3:
-        frames = 'multi_frame'
+    # # Determine whether file is single- or multi-frame, or is not an image
+    if 'PixelData' in ds:
+        if len(ds.pixel_array.shape) == 2:
+            frames = 'single_frame'
+        elif len(ds.pixel_array.shape) == 3:
+            frames = 'multi_frame'
+
+    else:
+        frames = 'no_image'
 
     # Construct the filename string
     filename = '{}_{}_{}_{}{}'.format(
         image_date,
-        image_time,
+        study_type,
         pt_name,
         frames,
         suffix
         )
 
     return filename
+
+
+def compare_dcm_files(filepath_1, filepath_2):
+    """ Compare two DICOM files at the specified paths, output the lines
+    on which they differ. """
+
+    # difflib.compare needs a list of lines, each ending in a newline
+
+    datasets = tuple([
+        dcmread(path, force=True) for path in (filepath_1, filepath_2)
+        ])
+
+    try:
+        rep = []
+        for dataset in datasets:
+            lines = str(dataset).split("\n")  # split into separate lines
+            lines = [line + "\n" for line in lines]  # add newline chars back
+            rep.append(lines)
+
+        # 'rep' is now a 2-element list, where each element is a list of all
+        # lines from a single file
+
+        # Define a list to hold output lines, initialise a Differ() instance
+        delta = []
+        d = Differ()
+
+        # Compare the elements of rep, store lines which differ between files
+        for line in list(d.compare(rep[0], rep[1])):
+            if (line[0] == '-') or (line[0] == '+'):
+                delta.append(line)
+
+        return delta
+
+    except TypeError as error:
+        sentence = 'Error whilst comparing files: {}\n\n'.format(error)
+
+        return sentence
+
+
+def decompress_files(input_dir, output_dir):
+    """ Take compressed files, decompress and save in new folder. """
+
+    print('Decompressing files from {}'.format(input_dir))
+
+    # Iterate over a directory and look at .dcm files
+    for root, dirs, files in os.walk(input_dir):
+        for file in files:
+            if file.lower().endswith('.dcm'):
+
+                # Get path to original file and define a filename
+                filepath = os.path.join(root, file)
+                filename = construct_filename(filepath, '.dcm')
+
+                # Read in the original dataset
+                with open(filepath, 'rb') as reader:
+                    ds = dcmread(reader, force = True)
+
+                try:
+                    # Use pylibjpeg to decompress the pixel array
+                    ds.decompress('pylibjpeg')
+
+                except NotImplementedError:  # one file is text-only
+                    pass
+
+                # Write the updated dataset out to a new file
+                output_path = os.path.join(output_dir, filename)
+
+                with open(output_path, 'wb') as writer:
+                    dcmwrite(writer, ds, write_like_original = False)
 
 
 def get_dcm_image(dcm_filepath, output_folder):
@@ -176,41 +249,45 @@ def get_dcm_image(dcm_filepath, output_folder):
 
     filename = construct_filename(dcm_filepath, '')
 
-    # For single-frame files:
-    if len(ds.pixel_array.shape) == 2:
+    # Only continue if file has a PixelData element
+    if 'PixelData' in ds:
 
-        # Create an image
-        im = Image.fromarray(np.uint8(ds.pixel_array))
+        # For single-frame files:
+        if len(ds.pixel_array.shape) == 2:
 
-        # Save as .png in the Images directory
-        im_filename = '{}.png'.format(filename)
-        im_path = os.path.join(output_folder, im_filename)
-        im.save(im_path)
+            # Create an image
+            im = Image.fromarray(np.uint8(ds.pixel_array))
 
-    # For multiframe files:
-    elif len(ds.pixel_array.shape) == 3:
-
-        # Create a new subdirectory to hold the images
-        file_dir_path = os.path.join(output_folder, filename)
-
-        try:
-            os.mkdir(file_dir_path)
-
-        except FileExistsError:
-            pass
-
-        i = 1
-        for frame in ds.pixel_array:
-            im = Image.fromarray(np.uint8(frame))
-
-            im_filename = '{}_{}.png'.format(filename, i)
-            im_path = os.path.join(file_dir_path, im_filename)
+            # Save as .png in the Images directory
+            im_filename = '{}.png'.format(filename)
+            im_path = os.path.join(output_folder, im_filename)
             im.save(im_path)
 
-            i += 1
+        # For multiframe files:
+        elif len(ds.pixel_array.shape) == 3:
+
+            # Create a new subdirectory to hold the images
+            file_dir_path = os.path.join(output_folder, filename)
+
+            try:
+                os.mkdir(file_dir_path)
+
+            except FileExistsError:
+                pass
+
+            # Then create each frame's image in the subdirectory
+            i = 1
+            for frame in ds.pixel_array:
+                im = Image.fromarray(np.uint8(frame))
+
+                im_filename = '{}_{}.png'.format(filename, i)
+                im_path = os.path.join(file_dir_path, im_filename)
+                im.save(im_path)
+
+                i += 1
 
 
-def get_dcm_metadata(dcm_filepath, output_folder):
+def get_dcm_text(dcm_filepath, output_folder):
     """ Given a path to a .dcm file, use DCMTK's dcmdump to dump the
     file's dataset into a .txt file and save it in the specified output
     folder. """
@@ -240,6 +317,8 @@ def get_all_images_and_metadata(files_dir, images_dir, metadata_dir):
     generate a .png and .txt file for each in the specified output
     folders. """
 
+    print('Generating images and text files from {}'.format(files_dir))
+
     # Iterate over the extracted archive contents
     for root, dirs, files in os.walk(files_dir):
 
@@ -250,48 +329,13 @@ def get_all_images_and_metadata(files_dir, images_dir, metadata_dir):
                 # Define the path to the file
                 dcm_filepath = os.path.join(root, file)
 
+                # with open(dcm_filepath, 'rb') as reader:
+                #     ds = dcmread(reader)
+                #     print(ds)
+
                 # Call functions to generate .png and .txt files
-                get_dcm_metadata(dcm_filepath, metadata_dir)
+                get_dcm_text(dcm_filepath, metadata_dir)
                 get_dcm_image(dcm_filepath, images_dir)
-
-
-def compare_dcm_files(filepath_1, filepath_2):
-    """ Compare two DICOM files at the specified paths, output the lines
-    on which they differ. """
-
-    # difflib.compare needs a list of lines, each ending in a newline
-
-    datasets = tuple([
-        dcmread(path, force=True) for path in (filepath_1, filepath_2)
-        ])
-
-    try:
-        rep = []
-        for dataset in datasets:
-            lines = str(dataset).split("\n")  # split into separate lines
-            lines = [line + "\n" for line in lines]  # add newline chars back
-            rep.append(lines)
-
-        # 'rep' is now a 2-element list, where each element is a list of all
-        # lines from a single file
-
-        # Define a list to hold output lines
-        delta = []
-
-        # Initialise a Differ() instance
-        d = Differ()
-
-        # Compare the elements of rep, store lines which differ between files
-        for line in list(d.compare(rep[0], rep[1])):
-            if (line[0] == '-') or (line[0] == '+'):
-                delta.append(line)
-
-        return delta
-
-    except TypeError as error:
-        sentence = 'Error whilst comparing files: {}\n\n'.format(error)
-
-        return sentence
 
 
 def compress_with_dcmtk(dcm_filepath, output_dir, method):
@@ -377,8 +421,6 @@ def compression_test(files_dir, compressed_dir, decompressed_dir, method):
         for file in files:
             if file.lower().endswith('.dcm'):
 
-                print(file)
-
                 # Define the path to the file
                 dcm_filepath = os.path.join(root, file)
 
@@ -447,10 +489,12 @@ def compression_test(files_dir, compressed_dir, decompressed_dir, method):
                 data_loss = original_size - decompress_size
 
                 sentence2 = (
-                    '\nOriginal file size: {}\n'
+                    '\nFile: {}\n'
+                    'Original file size: {}\n'
                     'Compressed size: {} (-{} bytes, {}-fold change)\n'
                     'Decompressed size: {} (+{})\n'
                     'Data loss: {} bytes\n\n'.format(
+                        file,
                         original_size,
                         compress_size,
                         compression,
@@ -467,7 +511,6 @@ def compression_test(files_dir, compressed_dir, decompressed_dir, method):
 
                 # Add information to the output text file
                 with open(text_file, 'a') as writer:
-                    writer.write('\n{}\n'.format(file))
                     writer.write(sentence2)
                     writer.write('Altered lines:\n')
                     for line in delta:
@@ -475,47 +518,77 @@ def compression_test(files_dir, compressed_dir, decompressed_dir, method):
 
 
 def main():
-    parent_dir = '/home/jay/projects/dicom/dicom'  # Path to downloaded archive
-    archive = 'MammoTomoUPMC_Case6.tar.bz2'  # Archive name
-    extracted_archive = 'Case6 [Case6]'  # Extracted directory name
+    parent_dir = '/home/jay/projects/dicom/dicom'
 
     """ Look at the compressed archive, extract files """
 
-    archive_path = os.path.join(parent_dir, archive)
+    zipped_archive = 'MammoTomoUPMC_Case6.tar.bz2'
+    archive_path = os.path.join(parent_dir, zipped_archive)
+
     # look_at_archive(archive_path)
     # extract_all_files(archive_path)
 
-    """ Get metadata and images from DICOM files """
+    """ Get images and text from initially uncompressed .dcm files """
 
-    original_files = os.path.join(parent_dir, extracted_archive)
+    # # Name and path of folder containing uncompressed files
+    # tomo_dir = 'tomo_breast_uncompressed'
+    # tomo_files = os.path.join(parent_dir, tomo_dir)
 
-    # # Create new directories to hold the output
-    # original_images = make_new_folder(parent_dir, 'original_images')
-    # original_metadata = make_new_folder(parent_dir, 'original_metadata')
+    # # Make output folders
+    # tomo_images = make_new_folder(parent_dir, 'tomo_images')
+    # tomo_text = make_new_folder(parent_dir, 'tomo_text')
 
-    # # Generate image/text files from DICOM files
+    # # Generate images and text files
     # get_all_images_and_metadata(
-    #     original_files,
-    #     original_images,
-    #     original_metadata
+    #     tomo_files,
+    #     tomo_images,
+    #     tomo_text
     #     )
 
-    """ Compress and decompress DICOM files """
+    """ Get images and text from initially compressed .dcm files """
 
-    # # Create new directories to hold the output
-    # compressed_files = make_new_folder(parent_dir, 'compressed_files')
-    # decompressed_files = make_new_folder(parent_dir, 'decompressed_files')
+    # # Name and path of folder containing compressed files
+    # mri_dir = 'mri_brain_compressed'
+    # mri_files = os.path.join(parent_dir, mri_dir)
 
-    # # Test various methods of compression/decompression
-    # # options: 'dcmtk-jpls', 'dcmtk-rle', 'pylibjpeg'
-    # method = 'pylibjpeg'
+    # # Decompress files, store in new folder
+    # mri_uncompressed = make_new_folder(parent_dir, 'mri_uncompressed')
+    # decompress_files(mri_files, mri_uncompressed)
 
-    # compression_test(
-    #     original_files,
-    #     compressed_files,
-    #     decompressed_files,
-    #     method
-    #     )
+    # # Generate images and text files
+    # mri_images = make_new_folder(parent_dir, 'mri_images')
+    # mri_text = make_new_folder(parent_dir, 'mri_text')
+
+    # get_all_images_and_metadata(
+    #         mri_uncompressed,
+    #         mri_images,
+    #         mri_text
+    #         )
+
+    """ Test different methods of compression/decompression """
+
+    # options = ['dcmtk-jpls', 'dcmtk-rle', 'pylibjpeg']
+
+    # for method in options:
+
+    #     print('Testing (de)compression with {}'.format(method))
+
+    #     compressed_files = make_new_folder(
+    #         parent_dir,
+    #         'compressed_{}'.format(method)
+    #         )
+
+    #     decompressed_files = make_new_folder(
+    #         parent_dir,
+    #         'decompressed_{}'.format(method)
+    #         )
+
+    #     compression_test(
+    #         tomo_files,
+    #         compressed_files,
+    #         decompressed_files,
+    #         method
+    #         )
 
 
 if __name__ == '__main__':
