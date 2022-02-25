@@ -631,8 +631,8 @@ def main():
 
     """ Look at the compressed archive, extract files """
 
-    zipped_archive = 'MammoTomoUPMC_Case6.tar.bz2'
-    archive_path = os.path.join(parent_dir, zipped_archive)
+    # zipped_archive = 'MammoTomoUPMC_Case6.tar.bz2'
+    # archive_path = os.path.join(parent_dir, zipped_archive)
 
     # look_at_archive(archive_path)
     # extract_all_files(archive_path)
@@ -676,22 +676,27 @@ def main():
 
     """ Test all different methods of compression/decompression """
 
+    # # Define packages to use for (de)compression
     # options = ['dcmtk-jpls', 'dcmtk-rle', 'pylibjpeg']
 
+    # # Use each package sequentially
     # for method in options:
-
     #     print('Testing (de)compression with {}'.format(method))
 
+    #     # Create a folder to hold compressed files
     #     compressed_files = make_new_folder(
     #         parent_dir,
     #         'compressed_{}'.format(method)
     #         )
 
+    #     # Create a folder to hold decompressed files
     #     decompressed_files = make_new_folder(
     #         parent_dir,
     #         'decompressed_{}'.format(method)
     #         )
 
+    #     # Run the compression_test function, creates text files to allow
+    #     # comparing methods
     #     compression_test(
     #         tomo_files,
     #         compressed_files,
