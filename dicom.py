@@ -49,7 +49,16 @@ from pydicom import dcmread, dcmwrite
 
 
 def make_new_folder(parent_dir, name):
-    """ Make a new directory and return its path """
+    """
+    Make a new directory and return its path.
+
+    Args:
+        parent_dir [path]: path to directory to create new folder in
+        name [string]: name of new folder
+
+    Outputs:
+        new_dir [path]: path to new folder
+    """
 
     new_dir = os.path.join(parent_dir, name)
 
@@ -64,7 +73,14 @@ def make_new_folder(parent_dir, name):
 
 def look_at_archive(archive_path):
     """ Use tarfile to examine the contents of a .tar.bz2 archive
-    without extracting anything. """
+    without extracting anything.
+
+    Args:
+        archive_path [path]: path to the zipped archive
+
+    Outputs:
+        Text descriptions of archive printed to terminal
+    """
 
     # Open archive
     tar = tarfile.open(archive_path, 'r:bz2')
@@ -129,7 +145,14 @@ def look_at_archive(archive_path):
 
 
 def extract_all_files(archive_path):
-    """ Extract contents of .tar.bz2 archive into current directory """
+    """ Extract all contents of .tar.bz2 archive.
+
+    Args:
+        archive_path [path]: path to the zipped archive
+
+    Outputs:
+        Archive contents extracted into current working directory
+    """
 
     tar = tarfile.open(archive_path, 'r:bz2')
     tar.extractall()
@@ -137,12 +160,19 @@ def extract_all_files(archive_path):
 
 
 def construct_filename(dcm_filepath, suffix):
-    """ Given a path to a .dcm file, create a filename with a given
-    suffix (e.g. '.txt', '.png') based on the file's dataset elements.
+    """ For a .dcm file, create a newfilename with a given suffix based
+    on the file's dataset elements.
 
-    As the example files are de-identified and don't contain patient
-    names, use the last part of the SOPInstanceUID as a unique
-    identifier for these.
+    As the example files used in this script are de-identified and don't
+    contain patient names, the last part of the SOPInstanceUID can be
+    used as an alternative unique identifier.
+
+    Args:
+        dcm_filepath [path]: path to the .dcm file
+        suffix [string]: suffix for filename e.g. '.txt', '.png'
+
+    Outputs:
+        filename [string]: new filename based on file contents
     """
 
     # Read in the dataset
@@ -178,8 +208,15 @@ def construct_filename(dcm_filepath, suffix):
 
 
 def compare_dcm_files(filepath_1, filepath_2):
-    """ Compare two DICOM files at the specified paths, output the lines
-    on which they differ. """
+    """ Compare two DICOM files and output the lines where they differ.
+
+    Args:
+        filepath_1 [path]: path to a .dcm file
+        filepath_2 [path]: path to another .dcm file
+
+    Outputs:
+        delta [list]: list of lines which differ between the two files
+    """
 
     # difflib.compare needs a list of lines, each ending in a newline
 
@@ -209,13 +246,22 @@ def compare_dcm_files(filepath_1, filepath_2):
         return delta
 
     except TypeError as error:
-        sentence = 'Error whilst comparing files: {}\n\n'.format(error)
+        delta = 'Error whilst comparing files: {}\n\n'.format(error)
 
-        return sentence
+        return delta
 
 
 def decompress_files(input_dir, output_dir):
-    """ Take compressed files, decompress and save in new folder. """
+    """ Take compressed files, decompress and save in new folder.
+
+    Args:
+        input_dir [path]: path to directory containing compressed files
+        output_dir [path]: path to store decompressed files at
+
+    Outputs:
+        Decompressed version created for all compressed .dcm files in
+        input directory, stored in output directory
+    """
 
     print('Decompressing files from {}'.format(input_dir))
 
@@ -248,7 +294,15 @@ def decompress_files(input_dir, output_dir):
 
 def get_dcm_image(dcm_filepath, output_folder):
     """ Given a DICOM file, create a PNG image from its PixelData
-    element and save in PNG format in the specified output folder. """
+    element and save in PNG format in the specified output folder.
+
+    Args:
+        dcm_filepath [path]: path to the .dcm file
+        output_folder [path]: path to store images at
+
+    Outputs:
+        .png image created from PixelData element and stored in output_folder
+    """
 
     # Read in file's dataset and get new filename
     with open(dcm_filepath, 'rb') as reader:
@@ -297,7 +351,15 @@ def get_dcm_image(dcm_filepath, output_folder):
 def get_dcm_text(dcm_filepath, output_folder):
     """ Given a path to a .dcm file, use DCMTK's dcmdump to dump the
     file's dataset into a .txt file and save it in the specified output
-    folder. """
+    folder.
+
+    Args:
+        dcm_filepath [path]: path to the .dcm file
+        output_folder [path]: path to store text files at
+
+    Outputs:
+        .txt file of dataset created and stored in output folder
+    """
 
     # Get new filename and define output path
     filename = construct_filename(dcm_filepath, '.txt')
@@ -322,7 +384,16 @@ def get_dcm_text(dcm_filepath, output_folder):
 def get_all_images_and_metadata(files_dir, images_dir, metadata_dir):
     """ Iterate over a directory containing UNCOMPRESSED .dcm files, and
     generate a .png and .txt file for each in the specified output
-    folders. """
+    folders.
+
+    Args:
+        files_dir [path]: path to uncompressed .dcm files
+        images_dir [path]: path to store .png outputs at
+        metadata_dir [path]:  path to store .txt outputs at
+
+    Outputs:
+        .png and .txt files generated for all uncompressed .dcm files
+    """
 
     print('Generating images and text files from {}'.format(files_dir))
 
@@ -352,6 +423,16 @@ def compress_with_dcmtk(dcm_filepath, output_dir, method):
         -Can compress with 'dcmcjpls' or 'dcmcrle'
         -Can decompress with 'dcmdjpls' or 'dcmdrle'
     Save the (de)compressed file in the specified output folder
+
+    Args:
+        dcm_filepath [path]: path to .dcm file
+        output_dir [path]: path to store output file at
+        method [string]: (de)compression type to use
+
+    Outputs:
+        output_path [path]: path to output file
+        original_size [integer]: size of original file before (de)compression
+        compress_size [integer]: size of file produced by (de)compression
     """
 
     # Define new filename and output path
@@ -373,8 +454,18 @@ def compress_with_pylibjpeg(dcm_filepath, output_dir, method):
     Read in a DICOM file at a given filepath
     Use pylibjpeg to (de)compress it
         Note that the ONLY encoding capability pylibjpeg has is RLE
-        (But it can decode with JPEG-LS)
+        But it can decode various JPEG formats, including JPEG-LS
     Save the resulting file in the specified output folder
+
+    Args:
+        dcm_filepath [path]: path to .dcm file
+        output_dir [path]: path to store output file at
+        method [string]: 'pylibjpeg-compress' or 'pylibjpeg-decompress'
+
+    Outputs:
+        output_path [path]: path to output file
+        original_size [integer]: size of original file before (de)compression
+        compress_size [integer]: size of file produced by (de)compression
     """
 
     # Read in the original dataset and define name for new file
@@ -406,12 +497,23 @@ def compress_with_pylibjpeg(dcm_filepath, output_dir, method):
 
 def compression_test(files_dir, compressed_dir, decompressed_dir, method):
     """
-    Iterate over .dcm files in the specified directory
-    For each file:
-        Using the specified method,
-        Compress the dataset and save to a folder of compressed files
-        Decompress the compressed file and save to another folder
-        Produce a text file describing file size/content changes
+    Iterate over all uncompressed .dcm files in a directory. Use the
+    specified package on each file to compress the dataset and save a
+    compressed version of the file. Then use the corresponding
+    package/method to decompress the compressed dataset and save a final
+    decompressed version of the file. Compare the original file with the
+    final decompressed version to determine whether any data is lost and
+    whether any element values ahve changed.
+
+    Args:
+        files_dir [path]:
+        compressed_dir [path]:
+        decompressed_dir [path]:
+        method [string]: 'dcmtk-jpls', 'dcmtk-rle' or 'pylibjpeg'
+
+    Outputs:
+        All files produced during compression and decompression of .dcm files
+        .txt file listing changes between original and final decompressed file
     """
 
     # Initialise the output text file
@@ -572,7 +674,7 @@ def main():
     #         mri_text
     #         )
 
-    """ Test different methods of compression/decompression """
+    """ Test all different methods of compression/decompression """
 
     # options = ['dcmtk-jpls', 'dcmtk-rle', 'pylibjpeg']
 
