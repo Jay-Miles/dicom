@@ -7,20 +7,27 @@ Author: Jay Miles
 STP: SBI102 ICT in the Clinical Environment competencies 3 & 4
 
 UPMC Breast Tomography and FFDM Collection:
-
-https://www.dclunie.com/pixelmedimagearchive/upmcdigitalmammotomocollection/index.html
-
+-www.dclunie.com/pixelmedimagearchive/upmcdigitalmammotomocollection/index.html
 -Using Case 6 as an example
 -Downloaded file is in .tar.bz2 format and is 172,557 KB
 -contains 26 objects - 15 are directories, 11 are uncompressed dcm files
 -total file size is 1241286528 bytes
--dcm files contain the element '(7fe0, 0010) Pixel Data', which is a numpy array
+-the files have the element '(7fe0, 0010) Pixel Data', which is a numpy array
+-Largest file is 640869820 bytes:
+    1.3.6.1.4.1.5962.99.1.2280943358.716200484.1363785608958.647.0.dcm
+-Smallest file is 3262956 bytes:
+    1.3.6.1.4.1.5962.99.1.2280943358.716200484.1363785608958.637.0.dcm
 
-Largest file is 640869820 bytes:
-1.3.6.1.4.1.5962.99.1.2280943358.716200484.1363785608958.647.0.dcm
+DCM ToolKit (DCMTK)
+-Various tools for DCM files, packaged for Ubuntu
+-dcmdump can be used to dump DCM file data to text
+-dcmcjpls/dcmdjpls can be used to (de)compress in JPEG-LS format
+-dcmcrle/dcmdrle can be used to (de)compress in RLE format
 
-Smallest file is 3262956 bytes:
-1.3.6.1.4.1.5962.99.1.2280943358.716200484.1363785608958.637.0.dcm
+pylibjpeg
+-Python packages to support image (de)compression via pydicom
+-Supports decompression of JPEG, JPEG-LS, JPEG-XT, JPEG2000, RLE formats
+-Only supports RLE encoding
 
 Compression and decompression using DCMTK results in some data loss.
 Compression and decompression using pylibjpeg results in no data loss.
@@ -512,7 +519,7 @@ def compression_test(files_dir, compressed_dir, decompressed_dir, method):
                 # Add information to the output text file
                 with open(text_file, 'a') as writer:
                     writer.write(sentence2)
-                    writer.write('Altered lines:\n')
+                    writer.write('Changes between original and final:\n')
                     for line in delta:
                         writer.write(line)
 
