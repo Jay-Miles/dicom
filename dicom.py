@@ -251,7 +251,7 @@ def compare_dcm_files(filepath_1, filepath_2):
         return delta
 
 
-def decompress_files(input_dir, output_dir):
+def decompress_mri_files(input_dir, output_dir):
     """ Take compressed files, decompress and save in new folder.
 
     Args:
@@ -268,7 +268,7 @@ def decompress_files(input_dir, output_dir):
     # Iterate over a directory and look at .dcm files
     for root, dirs, files in os.walk(input_dir):
         for file in files:
-            if file.lower().endswith('.dcm'):
+            if file.lower().endswith('anon.dcm'):
 
                 # Get path to original file and define a filename
                 filepath = os.path.join(root, file)
@@ -292,7 +292,7 @@ def decompress_files(input_dir, output_dir):
                     dcmwrite(writer, ds, write_like_original = False)
 
 
-def get_dcm_image(dcm_filepath, output_folder):
+def get_dcm_image(dcm_filepath, new_filename, output_folder):
     """ Given a DICOM file, create a PNG image from its PixelData
     element and save in PNG format in the specified output folder.
 
@@ -308,8 +308,6 @@ def get_dcm_image(dcm_filepath, output_folder):
     with open(dcm_filepath, 'rb') as reader:
         ds = dcmread(reader)
 
-    filename = construct_filename(dcm_filepath, '')
-
     # Only continue if file has a PixelData element
     if 'PixelData' in ds:
 
@@ -320,7 +318,7 @@ def get_dcm_image(dcm_filepath, output_folder):
             im = Image.fromarray(np.uint8(ds.pixel_array))
 
             # Save as .png in the Images directory
-            im_filename = '{}.png'.format(filename)
+            im_filename = '{}.png'.format(new_filename)
             im_path = os.path.join(output_folder, im_filename)
             im.save(im_path)
 
@@ -328,7 +326,7 @@ def get_dcm_image(dcm_filepath, output_folder):
         elif len(ds.pixel_array.shape) == 3:
 
             # Create a new subdirectory to hold the images
-            file_dir_path = os.path.join(output_folder, filename)
+            file_dir_path = os.path.join(output_folder, new_filename)
 
             try:
                 os.mkdir(file_dir_path)
@@ -341,14 +339,14 @@ def get_dcm_image(dcm_filepath, output_folder):
             for frame in ds.pixel_array:
                 im = Image.fromarray(np.uint8(frame))
 
-                im_filename = '{}_{}.png'.format(filename, i)
+                im_filename = '{}_{}.png'.format(new_filename, i)
                 im_path = os.path.join(file_dir_path, im_filename)
                 im.save(im_path)
 
                 i += 1
 
 
-def get_dcm_text(dcm_filepath, output_folder):
+def get_dcm_text(dcm_filepath, new_filename, output_folder):
     """ Given a path to a .dcm file, use DCMTK's dcmdump to dump the
     file's dataset into a .txt file and save it in the specified output
     folder.
@@ -361,9 +359,8 @@ def get_dcm_text(dcm_filepath, output_folder):
         .txt file of dataset created and stored in output folder
     """
 
-    # Get new filename and define output path
-    filename = construct_filename(dcm_filepath, '.txt')
-    new_filepath = os.path.join(output_folder, filename)
+    # Define output path
+    new_filepath = os.path.join(output_folder, new_filename)
 
     # Run dcmdump via command line to get text version of file
     dcm_call = ['dcmdump', '-M', str(dcm_filepath)]
@@ -405,15 +402,14 @@ def get_all_images_and_metadata(files_dir, images_dir, metadata_dir):
             if file.lower().endswith('.dcm'):
 
                 # Define the path to the file
-                dcm_filepath = os.path.join(root, file)
-
-                # with open(dcm_filepath, 'rb') as reader:
-                #     ds = dcmread(reader)
-                #     print(ds)
+                filepath = os.path.join(root, file)
 
                 # Call functions to generate .png and .txt files
-                get_dcm_text(dcm_filepath, metadata_dir)
-                get_dcm_image(dcm_filepath, images_dir)
+                im_filename = construct_filename(filepath, '')
+                get_dcm_image(filepath, im_filename, images_dir)
+
+                text_filename = construct_filename(filepath, '.txt')
+                get_dcm_text(filepath, text_filename, metadata_dir)
 
 
 def compress_with_dcmtk(dcm_filepath, output_dir, method):
@@ -626,8 +622,119 @@ def compression_test(files_dir, compressed_dir, decompressed_dir, method):
                         writer.write(line)
 
 
+def cross_compression(uncompressed_files, output_dir):
+    """
+    Iterate over a folder of uncompressed .dcm files. For each one:
+            -Perform JPEG-LS Lossless compression using dcmcjpls
+            -Create a .txt file from the compressed .dcm
+
+            -Perform JPEG-LS Lossless decompression of the compressed
+            file using pylibjpeg
+            -Create a .txt file from the decompressed .dcm
+
+            -Compare sizes of original, compressed and decompressed files
+            -Compare content of same
+
+    Args:
+        uncompressed_files [path]: original files to use
+        output_dir [path]: to hold compressed and decompressed files
+    """
+
+    print('Running cross-compression on {}'.format(uncompressed_files))
+
+    for root, dirs, files in os.walk(uncompressed_files):
+        for file in files:
+            if file.lower().endswith('.dcm'):
+
+                filepath = os.path.join(root, file)
+                filename = construct_filename(filepath, '')
+
+                # Create compressed file with dcmdjpls
+
+                comp_name = '{}_comp.dcm'.format(filename)
+                comp_path = os.path.join(output_dir, comp_name)
+
+                subprocess.run(['dcmcjpls', filepath, comp_path])
+
+                # Create decompressed file with pylibjpeg
+
+                with open(comp_path, 'rb') as reader:
+                    ds = dcmread(reader, force = True)
+
+                ds.decompress('pylibjpeg')
+
+                decomp_name = '{}_decomp.dcm'.format(filename)
+                decomp_path = os.path.join(output_dir, decomp_name)
+
+                with open(decomp_path, 'wb') as writer:
+                    dcmwrite(writer, ds, write_like_original = False)
+
+                # Generate .txt files for both new .dcm files
+
+                comp_text = '{}_comp.txt'.format(filename)
+                get_dcm_text(comp_path, comp_text, output_dir)
+
+                decomp_text = '{}_decomp.txt'.format(filename)
+                get_dcm_text(decomp_path, decomp_text, output_dir)
+
+                # Compare original, compressed and decompressed file sizes
+
+                original_size = os.path.getsize(filepath)
+                comp_size = os.path.getsize(comp_path)
+                fold_compression = original_size / comp_size
+                decomp_size = os.path.getsize(decomp_path)
+                bytes_lost = original_size - decomp_size
+
+                compare_sizes = (
+                    '\n\nFilename: {}\n'
+                    'Original file: {} bytes\n'
+                    'Compressed_file: {} bytes ({}-fold compression)\n'
+                    'Decompressed file: {} bytes ({} bytes lost)\n'
+                    ).format(
+                        filename,
+                        original_size,
+                        comp_size,
+                        fold_compression,
+                        decomp_size,
+                        bytes_lost
+                    )
+
+                # Compare file contents using difflib Differ()
+
+                comp_sentence = '\nOriginal vs compressed file:\n'
+                compression = compare_dcm_files(filepath, comp_path)
+
+                decomp_sentence = '\nCompressed vs decompressed file:\n'
+                decompression = compare_dcm_files(comp_path, decomp_path)
+
+                net_sentence = '\nOriginal vs decompressed file:\n'
+                net_change = compare_dcm_files(filepath, decomp_path)
+
+                # Add comparison info to output text file
+
+                comparison = '{}_comparisons.txt'.format(filename)
+                comparison_path = os.path.join(output_dir, comparison)
+
+                with open(comparison_path, 'w') as writer:
+                    writer.write(compare_sizes)
+
+                    writer.write(comp_sentence)
+                    for line in compression:
+                        writer.write(line)
+
+                    writer.write(decomp_sentence)
+                    for line in decompression:
+                        writer.write(line)
+
+                    writer.write(net_sentence)
+                    for line in net_change:
+                        writer.write(line)
+
+
 def main():
+
     parent_dir = '/home/jay/projects/dicom/dicom'
+
 
     """ Look at the compressed archive, extract files """
 
@@ -637,42 +744,53 @@ def main():
     # look_at_archive(archive_path)
     # extract_all_files(archive_path)
 
+
     """ Get images and text from initially uncompressed .dcm files """
 
-    # # Name and path of folder containing uncompressed files
-    # tomo_dir = 'tomo_breast_uncompressed'
-    # tomo_files = os.path.join(parent_dir, tomo_dir)
+    # Name and path of folder for all TOMO files
+    tomo_dir = 'tomo_breast'
+    tomo_files = os.path.join(parent_dir, tomo_dir)
 
-    # # Make output folders
-    # tomo_images = make_new_folder(parent_dir, 'tomo_images')
-    # tomo_text = make_new_folder(parent_dir, 'tomo_text')
+    # Name and path of folder holding original uncompressed TOMO files
+    tomo_original_dir = 'tomo_original_uncompressed'
+    tomo_original = os.path.join(tomo_files, tomo_original_dir)
 
-    # # Generate images and text files
-    # get_all_images_and_metadata(
-    #     tomo_files,
-    #     tomo_images,
-    #     tomo_text
-    #     )
+    # Make output folders
+    tomo_images = make_new_folder(tomo_files, 'tomo_images')
+    tomo_text = make_new_folder(tomo_files, 'tomo_text')
+
+    # Generate images and text files
+    get_all_images_and_metadata(
+        tomo_original,
+        tomo_images,
+        tomo_text
+        )
+
 
     """ Get images and text from initially compressed .dcm files """
 
-    # # Name and path of folder containing compressed files
-    # mri_dir = 'mri_brain_compressed'
-    # mri_files = os.path.join(parent_dir, mri_dir)
+    # Name and path of folder for all mri files
+    mri_dir = 'mri_brain'
+    mri_files = os.path.join(parent_dir, mri_dir)
 
-    # # Decompress files, store in new folder
-    # mri_uncompressed = make_new_folder(parent_dir, 'mri_uncompressed')
-    # decompress_files(mri_files, mri_uncompressed)
+    # Name/path of folder holding original (anonymised) compressed mri files
+    mri_original_dir = 'mri_original_anon_compressed'
+    mri_original = os.path.join(mri_files, mri_original_dir)
 
-    # # Generate images and text files
-    # mri_images = make_new_folder(parent_dir, 'mri_images')
-    # mri_text = make_new_folder(parent_dir, 'mri_text')
+    # Decompress files, store in new folder
+    mri_uncompressed = make_new_folder(mri_files, 'mri_uncompressed')
+    decompress_mri_files(mri_original, mri_uncompressed)
 
-    # get_all_images_and_metadata(
-    #         mri_uncompressed,
-    #         mri_images,
-    #         mri_text
-    #         )
+    # Generate images and text files
+    mri_images = make_new_folder(mri_files, 'mri_uncompressed_images')
+    mri_text = make_new_folder(mri_files, 'mri_uncompressed_text')
+
+    get_all_images_and_metadata(
+            mri_uncompressed,
+            mri_images,
+            mri_text
+            )
+
 
     """ Test all different methods of compression/decompression """
 
@@ -703,6 +821,15 @@ def main():
     #         decompressed_files,
     #         method
     #         )
+
+
+    """ Test cross-compression of files with dcmcjpls and pylibjpeg """
+
+    tomo_x_compression = make_new_folder(parent_dir, 'tomo_x_compression')
+    mri_x_compression = make_new_folder(parent_dir, 'mri_x_compression')
+
+    cross_compression(tomo_files, tomo_x_compression)
+    cross_compression(mri_uncompressed, mri_x_compression)
 
 
 if __name__ == '__main__':
